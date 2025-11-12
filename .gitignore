@@ -1,0 +1,60 @@
+# Environment files
+.env
+*.env
+!.env.example
+
+# Ansible
+*.retry
+.ansible_cache/
+ansible/.ansible/
+
+# SSH Keys
+*.pem
+*.key
+id_rsa*
+
+# Terraform (for future use)
+*.tfstate
+*.tfstate.*
+.terraform/
+.terraform.lock.hcl
+
+# Logs
+*.log
+logs/
+
+# Traefik
+traefik/acme.json
+traefik/logs/*.log
+traefik/certs/*.pem
+traefik/certs/*.key
+
+# Backups
+backups/
+*.sql
+*.tar.gz
+*.backup
+
+# OS Files
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+*~
+
+# IDE
+.idea/
+.vscode/
+*.iml
+
+# Project source code (should be in separate repos)
+projects/*/src/
+!projects/*/src/.gitkeep
+
+# Docker
+docker-compose.override.yml
+
+# Temporary files
+tmp/
+temp/
+*.tmp

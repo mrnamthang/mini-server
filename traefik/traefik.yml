@@ -1,0 +1,104 @@
+---
+# Traefik Static Configuration
+# This file contains the static configuration for Traefik
+
+# =============================================================================
+# API AND DASHBOARD
+# =============================================================================
+api:
+  dashboard: true  # Enable the dashboard
+  insecure: true   # Allow access without authentication (local network only)
+
+# =============================================================================
+# ENTRYPOINTS (Ports)
+# =============================================================================
+entryPoints:
+  web:
+    address: ":80"
+    # Uncomment for automatic HTTP to HTTPS redirect
+    # http:
+    #   redirections:
+    #     entryPoint:
+    #       to: websecure
+    #       scheme: https
+
+  websecure:
+    address: ":443"
+    # HTTP/3 support
+    http3: {}
+
+  traefik:
+    address: ":8080"  # Dashboard port
+
+# =============================================================================
+# PROVIDERS
+# =============================================================================
+providers:
+  # Docker provider - automatically discovers services
+  docker:
+    endpoint: "unix:///var/run/docker.sock"
+    exposedByDefault: false  # Only expose containers with traefik.enable=true
+    network: traefik-public  # Default network for Traefik
+    watch: true              # Watch for Docker events
+
+  # File provider for additional configuration
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+# =============================================================================
+# LOGS
+# =============================================================================
+log:
+  level: INFO  # DEBUG, INFO, WARN, ERROR
+  format: json
+  filePath: /var/log/traefik/traefik.log
+
+accessLog:
+  filePath: /var/log/traefik/access.log
+  format: json
+  bufferingSize: 100
+
+# =============================================================================
+# CERTIFICATE RESOLVERS (Let's Encrypt)
+# =============================================================================
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: your-email@example.com  # Change this!
+      storage: /etc/traefik/acme.json
+      # Use staging for testing, production for real certs
+      caServer: https://acme-staging-v02.api.letsencrypt.org/directory
+      # For production, uncomment:
+      # caServer: https://acme-v02.api.letsencrypt.org/directory
+
+      # HTTP Challenge (works for most cases)
+      httpChallenge:
+        entryPoint: web
+
+      # TLS Challenge (alternative)
+      # tlsChallenge: {}
+
+      # DNS Challenge (for wildcard certs)
+      # dnsChallenge:
+      #   provider: cloudflare
+      #   resolvers:
+      #     - "1.1.1.1:53"
+      #     - "8.8.8.8:53"
+
+# =============================================================================
+# METRICS (Optional - for monitoring)
+# =============================================================================
+# metrics:
+#   prometheus:
+#     addEntryPointsLabels: true
+#     addRoutersLabels: true
+#     addServicesLabels: true
+#     entryPoint: metrics
+
+# =============================================================================
+# GLOBAL CONFIGURATION
+# =============================================================================
+global:
+  checkNewVersion: true
+  sendAnonymousUsage: false

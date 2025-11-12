@@ -1,0 +1,306 @@
+---
+# Bootstrap Playbook - Initial Server Setup
+# This playbook configures a fresh Ubuntu 22.04 server with essential security and utilities
+
+- name: Bootstrap Mini Server
+  hosts: mini_servers
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display server information
+      ansible.builtin.debug:
+        msg:
+          - "Bootstrapping server: {{ inventory_hostname }}"
+          - "IP Address: {{ ansible_host }}"
+          - "OS: {{ ansible_distribution }} {{ ansible_distribution_version }}"
+          - "Hostname: {{ server_hostname | default('asus-mini-server') }}"
+
+  tasks:
+    # =========================================================================
+    # SYSTEM UPDATE
+    # =========================================================================
+    - name: Update apt cache
+      ansible.builtin.apt:
+        update_cache: yes
+        cache_valid_time: 3600
+      tags: [bootstrap, update]
+
+    - name: Upgrade all packages
+      ansible.builtin.apt:
+        upgrade: dist
+        autoremove: yes
+        autoclean: yes
+      tags: [bootstrap, update]
+
+    # =========================================================================
+    # HOSTNAME CONFIGURATION
+    # =========================================================================
+    - name: Set hostname
+      ansible.builtin.hostname:
+        name: "{{ server_hostname | default('asus-mini-server') }}"
+      tags: [bootstrap, hostname]
+
+    - name: Update /etc/hosts
+      ansible.builtin.lineinfile:
+        path: /etc/hosts
+        regexp: '^127\.0\.1\.1'
+        line: "127.0.1.1 {{ server_hostname | default('asus-mini-server') }}"
+        state: present
+      tags: [bootstrap, hostname]
+
+    # =========================================================================
+    # TIMEZONE CONFIGURATION
+    # =========================================================================
+    - name: Set timezone
+      community.general.timezone:
+        name: "{{ server_timezone | default('UTC') }}"
+      tags: [bootstrap, timezone]
+
+    # =========================================================================
+    # ESSENTIAL PACKAGES
+    # =========================================================================
+    - name: Install essential packages
+      ansible.builtin.apt:
+        name: "{{ essential_packages }}"
+        state: present
+        update_cache: yes
+      tags: [bootstrap, packages]
+
+    - name: Install development packages
+      ansible.builtin.apt:
+        name: "{{ dev_packages }}"
+        state: present
+      tags: [bootstrap, packages, dev]
+
+    # =========================================================================
+    # SSH HARDENING
+    # =========================================================================
+    - name: Ensure SSH directory exists for user
+      ansible.builtin.file:
+        path: "/home/{{ ansible_user }}/.ssh"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0700'
+      tags: [bootstrap, ssh]
+
+    - name: Configure SSH daemon for security
+      ansible.builtin.lineinfile:
+        path: /etc/ssh/sshd_config
+        regexp: "{{ item.regexp }}"
+        line: "{{ item.line }}"
+        state: present
+        validate: '/usr/sbin/sshd -t -f %s'
+      loop:
+        - { regexp: '^#?PermitRootLogin', line: 'PermitRootLogin no' }
+        - { regexp: '^#?PasswordAuthentication', line: 'PasswordAuthentication no' }
+        - { regexp: '^#?PubkeyAuthentication', line: 'PubkeyAuthentication yes' }
+        - { regexp: '^#?X11Forwarding', line: 'X11Forwarding no' }
+        - { regexp: '^#?MaxAuthTries', line: 'MaxAuthTries 3' }
+        - { regexp: '^#?ClientAliveInterval', line: 'ClientAliveInterval 300' }
+        - { regexp: '^#?ClientAliveCountMax', line: 'ClientAliveCountMax 2' }
+      notify: Restart SSH
+      tags: [bootstrap, ssh, security]
+
+    # =========================================================================
+    # FIREWALL CONFIGURATION (UFW)
+    # =========================================================================
+    - name: Install UFW
+      ansible.builtin.apt:
+        name: ufw
+        state: present
+      when: ufw_enabled | default(true)
+      tags: [bootstrap, firewall]
+
+    - name: Configure UFW defaults
+      community.general.ufw:
+        direction: "{{ item.direction }}"
+        policy: "{{ item.policy }}"
+        state: enabled
+      loop:
+        - { direction: 'incoming', policy: 'deny' }
+        - { direction: 'outgoing', policy: 'allow' }
+      when: ufw_enabled | default(true)
+      tags: [bootstrap, firewall]
+
+    - name: Configure UFW rules
+      community.general.ufw:
+        rule: "{{ item.rule }}"
+        port: "{{ item.port }}"
+        proto: "{{ item.proto }}"
+        comment: "{{ item.comment | default(omit) }}"
+      loop: "{{ ufw_rules }}"
+      when: ufw_enabled | default(true)
+      tags: [bootstrap, firewall]
+
+    - name: Enable UFW
+      community.general.ufw:
+        state: enabled
+      when: ufw_enabled | default(true)
+      tags: [bootstrap, firewall]
+
+    # =========================================================================
+    # FAIL2BAN INSTALLATION
+    # =========================================================================
+    - name: Install Fail2ban
+      ansible.builtin.apt:
+        name: fail2ban
+        state: present
+      when: fail2ban_enabled | default(true)
+      tags: [bootstrap, fail2ban, security]
+
+    - name: Configure Fail2ban for SSH
+      ansible.builtin.copy:
+        dest: /etc/fail2ban/jail.local
+        content: |
+          [DEFAULT]
+          bantime = 3600
+          findtime = 600
+          maxretry = 3
+
+          [sshd]
+          enabled = true
+          port = 22
+          filter = sshd
+          logpath = /var/log/auth.log
+          maxretry = 3
+        owner: root
+        group: root
+        mode: '0644'
+      when: fail2ban_enabled | default(true)
+      notify: Restart Fail2ban
+      tags: [bootstrap, fail2ban, security]
+
+    # =========================================================================
+    # DIRECTORY STRUCTURE
+    # =========================================================================
+    - name: Create base project directories
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      loop:
+        - "{{ projects_base_dir }}"
+        - "{{ docker_data_dir }}"
+        - "{{ traefik_config_dir }}"
+        - "{{ traefik_config_dir }}/dynamic"
+        - "{{ traefik_config_dir }}/certs"
+      tags: [bootstrap, directories]
+
+    # =========================================================================
+    # SYSTEM LIMITS
+    # =========================================================================
+    - name: Configure system limits for Docker
+      ansible.builtin.pam_limits:
+        domain: "{{ ansible_user }}"
+        limit_type: "{{ item.limit_type }}"
+        limit_item: "{{ item.limit_item }}"
+        value: "{{ item.value }}"
+      loop:
+        - { limit_type: 'soft', limit_item: 'nofile', value: '65536' }
+        - { limit_type: 'hard', limit_item: 'nofile', value: '65536' }
+        - { limit_type: 'soft', limit_item: 'nproc', value: '32768' }
+        - { limit_type: 'hard', limit_item: 'nproc', value: '32768' }
+      tags: [bootstrap, limits]
+
+    - name: Configure sysctl for Docker
+      ansible.posix.sysctl:
+        name: "{{ item.name }}"
+        value: "{{ item.value }}"
+        state: present
+        reload: yes
+      loop:
+        - { name: 'vm.max_map_count', value: '262144' }
+        - { name: 'fs.file-max', value: '2097152' }
+        - { name: 'net.core.somaxconn', value: '65535' }
+      tags: [bootstrap, sysctl]
+
+    # =========================================================================
+    # AUTOMATIC SECURITY UPDATES
+    # =========================================================================
+    - name: Install unattended-upgrades
+      ansible.builtin.apt:
+        name: unattended-upgrades
+        state: present
+      tags: [bootstrap, security, updates]
+
+    - name: Configure automatic security updates
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Allowed-Origins {
+              "${distro_id}:${distro_codename}-security";
+              "${distro_id}ESMApps:${distro_codename}-apps-security";
+              "${distro_id}ESM:${distro_codename}-infra-security";
+          };
+          Unattended-Upgrade::AutoFixInterruptedDpkg "true";
+          Unattended-Upgrade::MinimalSteps "true";
+          Unattended-Upgrade::Remove-Unused-Dependencies "true";
+          Unattended-Upgrade::Automatic-Reboot "false";
+        owner: root
+        group: root
+        mode: '0644'
+      tags: [bootstrap, security, updates]
+
+    # =========================================================================
+    # BASH ALIASES AND UTILITIES
+    # =========================================================================
+    - name: Add useful bash aliases for user
+      ansible.builtin.blockinfile:
+        path: "/home/{{ ansible_user }}/.bashrc"
+        block: |
+          # Docker aliases
+          alias dps='docker ps'
+          alias dpsa='docker ps -a'
+          alias dimg='docker images'
+          alias dlog='docker logs -f'
+          alias dexec='docker exec -it'
+          alias dclean='docker system prune -af'
+
+          # Docker Compose aliases
+          alias dcup='docker-compose up -d'
+          alias dcdown='docker-compose down'
+          alias dcrestart='docker-compose restart'
+          alias dclogs='docker-compose logs -f'
+
+          # System aliases
+          alias ll='ls -lah'
+          alias ports='sudo netstat -tulpn'
+          alias usage='du -h -d 1 | sort -h'
+        marker: "# {mark} ANSIBLE MANAGED BLOCK - Docker aliases"
+        create: yes
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      tags: [bootstrap, aliases]
+
+  handlers:
+    - name: Restart SSH
+      ansible.builtin.service:
+        name: ssh
+        state: restarted
+
+    - name: Restart Fail2ban
+      ansible.builtin.service:
+        name: fail2ban
+        state: restarted
+
+  post_tasks:
+    - name: Display completion message
+      ansible.builtin.debug:
+        msg:
+          - "✅ Bootstrap completed successfully!"
+          - "Server is now configured with:"
+          - "  - Updated packages"
+          - "  - Hardened SSH configuration"
+          - "  - UFW firewall enabled"
+          - "  - Fail2ban protection"
+          - "  - Essential development tools"
+          - ""
+          - "Next steps:"
+          - "  1. Run: make docker (to install Docker)"
+          - "  2. Run: make traefik (to setup reverse proxy)"
+          - "  3. Deploy your projects"

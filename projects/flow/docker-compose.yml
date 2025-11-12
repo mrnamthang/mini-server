@@ -1,0 +1,147 @@
+---
+# Flow Project - Docker Compose Configuration
+# .NET 8 API + React Frontend + PostgreSQL 16
+# Integrated with Traefik reverse proxy
+
+version: '3.8'
+
+services:
+  # ===========================================================================
+  # PostgreSQL 16 Database
+  # ===========================================================================
+  flow-db:
+    image: postgres:16-alpine
+    container_name: flow-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-flowdb}
+      POSTGRES_USER: ${POSTGRES_USER:-flowuser}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
+      PGDATA: /var/lib/postgresql/data/pgdata
+    volumes:
+      - flow-db-data:/var/lib/postgresql/data
+    networks:
+      - flow-internal
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-flowuser} -d ${POSTGRES_DB:-flowdb}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 10s
+    labels:
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # ===========================================================================
+  # .NET 8 API Backend
+  # ===========================================================================
+  flow-api:
+    image: flow-api:latest
+    container_name: flow-api
+    restart: unless-stopped
+    build:
+      context: ./src
+      dockerfile: Flow.Api/Dockerfile
+    environment:
+      - ASPNETCORE_ENVIRONMENT=${ASPNETCORE_ENVIRONMENT:-Production}
+      - ASPNETCORE_URLS=http://+:5000
+      - ConnectionStrings__DefaultConnection=Host=flow-db;Port=5432;Database=${POSTGRES_DB:-flowdb};Username=${POSTGRES_USER:-flowuser};Password=${POSTGRES_PASSWORD:-changeme}
+      - JWT__Secret=${JWT_SECRET:-change-this-secret-key-in-production}
+      - JWT__Issuer=${JWT_ISSUER:-flow-api}
+      - JWT__Audience=${JWT_AUDIENCE:-flow-web}
+      - JWT__ExpirationInMinutes=${JWT_EXPIRATION:-60}
+    depends_on:
+      flow-db:
+        condition: service_healthy
+    networks:
+      - flow-internal
+      - traefik-public
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:5000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    labels:
+      # Traefik configuration
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+
+      # HTTP Router
+      - "traefik.http.routers.flow-api.rule=Host(`${FLOW_API_DOMAIN:-api.flow.local}`)"
+      - "traefik.http.routers.flow-api.entrypoints=web"
+      - "traefik.http.routers.flow-api.service=flow-api"
+
+      # Service
+      - "traefik.http.services.flow-api.loadbalancer.server.port=5000"
+
+      # Middleware
+      - "traefik.http.routers.flow-api.middlewares=security-headers@file,compression@file"
+
+      # HTTPS (uncomment for production with SSL)
+      # - "traefik.http.routers.flow-api-secure.rule=Host(`${FLOW_API_DOMAIN:-api.flow.local}`)"
+      # - "traefik.http.routers.flow-api-secure.entrypoints=websecure"
+      # - "traefik.http.routers.flow-api-secure.tls=true"
+      # - "traefik.http.routers.flow-api-secure.tls.certresolver=letsencrypt"
+
+      # Auto-update
+      - "com.centurylinklabs.watchtower.enable=true"
+
+  # ===========================================================================
+  # React 18 Frontend
+  # ===========================================================================
+  flow-web:
+    image: flow-web:latest
+    container_name: flow-web
+    restart: unless-stopped
+    build:
+      context: ./src/flow-web
+      dockerfile: Dockerfile
+      args:
+        - VITE_API_URL=${VITE_API_URL:-http://api.flow.local}
+    environment:
+      - NODE_ENV=production
+      - VITE_API_URL=${VITE_API_URL:-http://api.flow.local}
+    depends_on:
+      - flow-api
+    networks:
+      - traefik-public
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    labels:
+      # Traefik configuration
+      - "traefik.enable=true"
+      - "traefik.docker.network=traefik-public"
+
+      # HTTP Router
+      - "traefik.http.routers.flow-web.rule=Host(`${FLOW_DOMAIN:-flow.local}`)"
+      - "traefik.http.routers.flow-web.entrypoints=web"
+      - "traefik.http.routers.flow-web.service=flow-web"
+
+      # Service
+      - "traefik.http.services.flow-web.loadbalancer.server.port=80"
+
+      # Middleware
+      - "traefik.http.routers.flow-web.middlewares=security-headers@file,compression@file"
+
+      # HTTPS (uncomment for production with SSL)
+      # - "traefik.http.routers.flow-web-secure.rule=Host(`${FLOW_DOMAIN:-flow.local}`)"
+      # - "traefik.http.routers.flow-web-secure.entrypoints=websecure"
+      # - "traefik.http.routers.flow-web-secure.tls=true"
+      # - "traefik.http.routers.flow-web-secure.tls.certresolver=letsencrypt"
+
+      # Auto-update
+      - "com.centurylinklabs.watchtower.enable=true"
+
+networks:
+  flow-internal:
+    driver: bridge
+  traefik-public:
+    external: true
+
+volumes:
+  flow-db-data:
+    driver: local

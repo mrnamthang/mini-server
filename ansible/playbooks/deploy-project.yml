@@ -1,0 +1,218 @@
+---
+# Project Deployment Playbook
+# Deploys Flow or Tradewhispr projects to the mini-server
+# Usage: ansible-playbook deploy-project.yml -e "project=flow"
+
+- name: Deploy Project
+  hosts: mini_servers
+  become: true
+  gather_facts: true
+
+  vars:
+    project_name: "{{ project | default('') }}"
+    project_configs:
+      flow:
+        dir: "{{ flow_project_dir }}"
+        git_repo: "{{ flow_git_repo | default('') }}"
+        git_branch: "{{ flow_git_branch | default('main') }}"
+        compose_file: "docker-compose.yml"
+        env_template: "{{ playbook_dir }}/../../projects/flow/.env.example"
+      tradewhispr:
+        dir: "{{ tradewhispr_project_dir }}"
+        git_repo: "{{ tradewhispr_git_repo | default('') }}"
+        git_branch: "{{ tradewhispr_git_branch | default('main') }}"
+        compose_file: "docker-compose.yml"
+        env_template: "{{ playbook_dir }}/../../projects/tradewhispr/.env.example"
+
+  pre_tasks:
+    - name: Validate project name
+      ansible.builtin.fail:
+        msg: "Invalid project name. Must be 'flow' or 'tradewhispr'"
+      when: project_name not in ['flow', 'tradewhispr']
+      tags: [always]
+
+    - name: Display deployment info
+      ansible.builtin.debug:
+        msg:
+          - "Deploying project: {{ project_name }}"
+          - "Target directory: {{ project_configs[project_name].dir }}"
+          - "Git repository: {{ project_configs[project_name].git_repo | default('Not configured - manual deployment') }}"
+      tags: [always]
+
+  tasks:
+    # =========================================================================
+    # DIRECTORY SETUP
+    # =========================================================================
+    - name: Ensure project directory exists
+      ansible.builtin.file:
+        path: "{{ project_configs[project_name].dir }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      tags: [deploy, directories]
+
+    - name: Ensure project data directory exists
+      ansible.builtin.file:
+        path: "{{ docker_data_dir }}/{{ project_name }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      tags: [deploy, directories]
+
+    # =========================================================================
+    # CONFIGURATION FILES
+    # =========================================================================
+    - name: Copy docker-compose.yml
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../projects/{{ project_name }}/docker-compose.yml"
+        dest: "{{ project_configs[project_name].dir }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      tags: [deploy, config]
+
+    - name: Check if .env file exists
+      ansible.builtin.stat:
+        path: "{{ project_configs[project_name].dir }}/.env"
+      register: env_file
+      tags: [deploy, config]
+
+    - name: Copy .env.example if .env doesn't exist
+      ansible.builtin.copy:
+        src: "{{ project_configs[project_name].env_template }}"
+        dest: "{{ project_configs[project_name].dir }}/.env"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0600'
+        force: no
+      when: not env_file.stat.exists
+      tags: [deploy, config]
+
+    - name: Display .env configuration reminder
+      ansible.builtin.debug:
+        msg:
+          - "⚠️  IMPORTANT: Configure environment variables"
+          - "Edit: {{ project_configs[project_name].dir }}/.env"
+          - "Set passwords, secrets, and domain names"
+      when: not env_file.stat.exists
+      tags: [deploy, config]
+
+    # =========================================================================
+    # SOURCE CODE (if git repo configured)
+    # =========================================================================
+    - name: Check if source code exists
+      ansible.builtin.stat:
+        path: "{{ project_configs[project_name].dir }}/src"
+      register: src_dir
+      tags: [deploy, source]
+
+    - name: Clone git repository
+      ansible.builtin.git:
+        repo: "{{ project_configs[project_name].git_repo }}"
+        dest: "{{ project_configs[project_name].dir }}/src"
+        version: "{{ project_configs[project_name].git_branch }}"
+        force: yes
+      become_user: "{{ ansible_user }}"
+      when:
+        - project_configs[project_name].git_repo != ''
+        - not src_dir.stat.exists
+      tags: [deploy, source]
+
+    - name: Update git repository
+      ansible.builtin.git:
+        repo: "{{ project_configs[project_name].git_repo }}"
+        dest: "{{ project_configs[project_name].dir }}/src"
+        version: "{{ project_configs[project_name].git_branch }}"
+        force: yes
+      become_user: "{{ ansible_user }}"
+      when:
+        - project_configs[project_name].git_repo != ''
+        - src_dir.stat.exists
+      tags: [deploy, source, update]
+
+    - name: Display manual deployment instructions
+      ansible.builtin.debug:
+        msg:
+          - "⚠️  Git repository not configured"
+          - "Please manually deploy source code to:"
+          - "{{ project_configs[project_name].dir }}/src"
+      when: project_configs[project_name].git_repo == ''
+      tags: [deploy, source]
+
+    # =========================================================================
+    # DOCKER DEPLOYMENT
+    # =========================================================================
+    - name: Pull Docker images
+      ansible.builtin.command:
+        cmd: docker-compose pull
+        chdir: "{{ project_configs[project_name].dir }}"
+      become_user: "{{ ansible_user }}"
+      ignore_errors: yes
+      tags: [deploy, docker]
+
+    - name: Build Docker images
+      ansible.builtin.command:
+        cmd: docker-compose build --pull
+        chdir: "{{ project_configs[project_name].dir }}"
+      become_user: "{{ ansible_user }}"
+      when: src_dir.stat.exists or (project_configs[project_name].git_repo != '')
+      tags: [deploy, docker, build]
+
+    - name: Start services
+      ansible.builtin.command:
+        cmd: docker-compose up -d
+        chdir: "{{ project_configs[project_name].dir }}"
+      become_user: "{{ ansible_user }}"
+      tags: [deploy, docker, start]
+
+    - name: Wait for services to be ready
+      ansible.builtin.pause:
+        seconds: 10
+      tags: [deploy, docker]
+
+    # =========================================================================
+    # VERIFICATION
+    # =========================================================================
+    - name: Check service status
+      ansible.builtin.command:
+        cmd: docker-compose ps
+        chdir: "{{ project_configs[project_name].dir }}"
+      register: compose_status
+      become_user: "{{ ansible_user }}"
+      changed_when: false
+      tags: [deploy, verify]
+
+    - name: Get running containers
+      ansible.builtin.shell:
+        cmd: docker ps --filter name={{ project_name }} --format "{{ '{{' }}.Names{{ '}}' }}: {{ '{{' }}.Status{{ '}}' }}"
+      register: container_status
+      changed_when: false
+      tags: [deploy, verify]
+
+  post_tasks:
+    - name: Display deployment summary
+      ansible.builtin.debug:
+        msg:
+          - "✅ {{ project_name | title }} deployment completed!"
+          - ""
+          - "Container Status:"
+          - "{{ container_status.stdout_lines | join('\n') }}"
+          - ""
+          - "Access Points:"
+          - "{% if project_name == 'flow' %}"
+          - "  Frontend: http://{{ flow_domain }}"
+          - "  API: http://{{ flow_api_domain }}"
+          - "{% elif project_name == 'tradewhispr' %}"
+          - "  Frontend: http://{{ tradewhispr_domain }}"
+          - "  API: http://{{ tradewhispr_api_domain }}"
+          - "  API Docs: http://{{ tradewhispr_api_domain }}/docs"
+          - "{% endif %}"
+          - ""
+          - "Next steps:"
+          - "  1. Configure .env file: {{ project_configs[project_name].dir }}/.env"
+          - "  2. Update /etc/hosts on your Mac"
+          - "  3. Check logs: make logs-{{ project_name }}"
+          - "  4. Access Traefik dashboard: http://{{ traefik_dashboard_domain }}"
+      tags: [always]

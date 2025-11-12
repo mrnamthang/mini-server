@@ -1,0 +1,64 @@
+---
+# Traefik Reverse Proxy
+# This docker-compose file runs Traefik as a reverse proxy and load balancer
+
+version: '3.8'
+
+services:
+  traefik:
+    image: traefik:v3.0
+    container_name: traefik
+    restart: unless-stopped
+    security_opt:
+      - no-new-privileges:true
+    networks:
+      - traefik-public
+    ports:
+      - "80:80"      # HTTP
+      - "443:443"    # HTTPS
+      - "8080:8080"  # Dashboard
+    environment:
+      - TZ=America/Los_Angeles
+    volumes:
+      # Docker socket (required for auto-discovery)
+      - /var/run/docker.sock:/var/run/docker.sock:ro
+
+      # Traefik configuration
+      - ./traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./dynamic:/etc/traefik/dynamic:ro
+
+      # SSL certificates
+      - ./acme.json:/etc/traefik/acme.json
+      - ./certs:/etc/traefik/certs:ro
+
+      # Logs
+      - ./logs:/var/log/traefik
+    labels:
+      # Enable Traefik for this container
+      - "traefik.enable=true"
+
+      # Dashboard
+      - "traefik.http.routers.dashboard.rule=Host(`traefik.local`)"
+      - "traefik.http.routers.dashboard.service=api@internal"
+      - "traefik.http.routers.dashboard.entrypoints=web"
+
+      # Middleware for security headers
+      - "traefik.http.middlewares.security-headers.headers.browserXssFilter=true"
+      - "traefik.http.middlewares.security-headers.headers.contentTypeNosniff=true"
+      - "traefik.http.middlewares.security-headers.headers.forceSTSHeader=true"
+      - "traefik.http.middlewares.security-headers.headers.stsIncludeSubdomains=true"
+      - "traefik.http.middlewares.security-headers.headers.stsPreload=true"
+      - "traefik.http.middlewares.security-headers.headers.stsSeconds=31536000"
+
+      # Watchtower - auto update (optional)
+      - "com.centurylinklabs.watchtower.enable=true"
+    healthcheck:
+      test: ["CMD", "traefik", "healthcheck", "--ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 5s
+
+networks:
+  traefik-public:
+    external: true

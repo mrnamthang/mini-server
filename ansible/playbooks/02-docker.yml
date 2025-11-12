@@ -1,0 +1,260 @@
+---
+# Docker Installation Playbook
+# Installs Docker Engine and Docker Compose on Ubuntu 22.04
+
+- name: Install Docker and Docker Compose
+  hosts: mini_servers
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display Docker installation info
+      ansible.builtin.debug:
+        msg:
+          - "Installing Docker on: {{ inventory_hostname }}"
+          - "Docker Edition: {{ docker_edition }}"
+          - "Docker Compose Version: {{ docker_compose_version }}"
+
+  tasks:
+    # =========================================================================
+    # PREREQUISITES
+    # =========================================================================
+    - name: Remove old Docker versions
+      ansible.builtin.apt:
+        name:
+          - docker
+          - docker-engine
+          - docker.io
+          - containerd
+          - runc
+        state: absent
+      tags: [docker, cleanup]
+
+    - name: Install Docker prerequisites
+      ansible.builtin.apt:
+        name:
+          - apt-transport-https
+          - ca-certificates
+          - curl
+          - gnupg
+          - lsb-release
+        state: present
+        update_cache: yes
+      tags: [docker, prerequisites]
+
+    # =========================================================================
+    # DOCKER REPOSITORY
+    # =========================================================================
+    - name: Create keyrings directory
+      ansible.builtin.file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+      tags: [docker, repository]
+
+    - name: Add Docker GPG key
+      ansible.builtin.apt_key:
+        url: https://download.docker.com/linux/ubuntu/gpg
+        keyring: /etc/apt/keyrings/docker.gpg
+        state: present
+      tags: [docker, repository]
+
+    - name: Add Docker repository
+      ansible.builtin.apt_repository:
+        repo: "deb [arch=amd64 signed-by=/etc/apt/keyrings/docker.gpg] https://download.docker.com/linux/ubuntu {{ ansible_distribution_release }} stable"
+        state: present
+        filename: docker
+        update_cache: yes
+      tags: [docker, repository]
+
+    # =========================================================================
+    # DOCKER ENGINE INSTALLATION
+    # =========================================================================
+    - name: Install Docker Engine
+      ansible.builtin.apt:
+        name:
+          - docker-ce
+          - docker-ce-cli
+          - containerd.io
+          - docker-buildx-plugin
+          - docker-compose-plugin
+        state: present
+        update_cache: yes
+      tags: [docker, install]
+
+    - name: Ensure Docker service is enabled and started
+      ansible.builtin.service:
+        name: docker
+        state: started
+        enabled: yes
+      tags: [docker, service]
+
+    # =========================================================================
+    # DOCKER CONFIGURATION
+    # =========================================================================
+    - name: Create Docker daemon configuration directory
+      ansible.builtin.file:
+        path: /etc/docker
+        state: directory
+        mode: '0755'
+      tags: [docker, config]
+
+    - name: Configure Docker daemon
+      ansible.builtin.copy:
+        dest: /etc/docker/daemon.json
+        content: |
+          {
+            "log-driver": "json-file",
+            "log-opts": {
+              "max-size": "10m",
+              "max-file": "3"
+            },
+            "storage-driver": "overlay2",
+            "default-address-pools": [
+              {
+                "base": "172.17.0.0/12",
+                "size": 24
+              }
+            ],
+            "dns": ["8.8.8.8", "8.8.4.4"],
+            "features": {
+              "buildkit": true
+            }
+          }
+        owner: root
+        group: root
+        mode: '0644'
+      notify: Restart Docker
+      tags: [docker, config]
+
+    # =========================================================================
+    # USER PERMISSIONS
+    # =========================================================================
+    - name: Add user to docker group
+      ansible.builtin.user:
+        name: "{{ ansible_user }}"
+        groups: docker
+        append: yes
+      tags: [docker, permissions]
+
+    - name: Add additional users to docker group
+      ansible.builtin.user:
+        name: "{{ item }}"
+        groups: docker
+        append: yes
+      loop: "{{ docker_users | default([]) }}"
+      when: docker_users is defined and docker_users | length > 0
+      tags: [docker, permissions]
+
+    # =========================================================================
+    # DOCKER COMPOSE (Standalone)
+    # =========================================================================
+    - name: Check if Docker Compose standalone exists
+      ansible.builtin.stat:
+        path: /usr/local/bin/docker-compose
+      register: docker_compose_check
+      tags: [docker, compose]
+
+    - name: Install Docker Compose standalone
+      ansible.builtin.get_url:
+        url: "https://github.com/docker/compose/releases/download/v{{ docker_compose_version }}/docker-compose-linux-x86_64"
+        dest: /usr/local/bin/docker-compose
+        mode: '0755'
+      when: not docker_compose_check.stat.exists
+      tags: [docker, compose]
+
+    - name: Create docker-compose symlink
+      ansible.builtin.file:
+        src: /usr/local/bin/docker-compose
+        dest: /usr/bin/docker-compose
+        state: link
+      when: not docker_compose_check.stat.exists
+      tags: [docker, compose]
+
+    # =========================================================================
+    # DOCKER NETWORKS
+    # =========================================================================
+    - name: Create Traefik network
+      community.docker.docker_network:
+        name: "{{ traefik_network }}"
+        driver: bridge
+        state: present
+      tags: [docker, networks]
+
+    # =========================================================================
+    # DOCKER BUILDX (for multi-platform builds)
+    # =========================================================================
+    - name: Set up Docker Buildx
+      ansible.builtin.shell: |
+        docker buildx create --name multiarch --driver docker-container --use || true
+        docker buildx inspect multiarch --bootstrap
+      become_user: "{{ ansible_user }}"
+      tags: [docker, buildx]
+      changed_when: false
+
+    # =========================================================================
+    # DOCKER SYSTEM PRUNE CRON JOB
+    # =========================================================================
+    - name: Add weekly Docker cleanup cron job
+      ansible.builtin.cron:
+        name: "Docker system prune"
+        minute: "0"
+        hour: "3"
+        weekday: "0"
+        job: "/usr/bin/docker system prune -af --volumes > /dev/null 2>&1"
+        user: root
+      tags: [docker, maintenance]
+
+    # =========================================================================
+    # VERIFICATION
+    # =========================================================================
+    - name: Verify Docker installation
+      ansible.builtin.command: docker --version
+      register: docker_version
+      changed_when: false
+      tags: [docker, verify]
+
+    - name: Verify Docker Compose installation
+      ansible.builtin.command: docker-compose --version
+      register: docker_compose_version_output
+      changed_when: false
+      tags: [docker, verify]
+
+    - name: Test Docker with hello-world
+      community.docker.docker_container:
+        name: hello-world-test
+        image: hello-world
+        state: started
+        detach: false
+        cleanup: true
+      register: hello_world_result
+      tags: [docker, verify]
+
+  handlers:
+    - name: Restart Docker
+      ansible.builtin.service:
+        name: docker
+        state: restarted
+
+  post_tasks:
+    - name: Display Docker information
+      ansible.builtin.debug:
+        msg:
+          - "✅ Docker installation completed successfully!"
+          - ""
+          - "Installed versions:"
+          - "  {{ docker_version.stdout }}"
+          - "  {{ docker_compose_version_output.stdout }}"
+          - ""
+          - "Docker features:"
+          - "  - BuildKit enabled"
+          - "  - Buildx multi-platform support"
+          - "  - Log rotation configured (10MB, 3 files)"
+          - "  - Weekly cleanup scheduled"
+          - ""
+          - "User {{ ansible_user }} added to docker group"
+          - "⚠️  User may need to log out and back in for group changes to take effect"
+          - ""
+          - "Next steps:"
+          - "  1. Run: make traefik (to setup reverse proxy)"
+          - "  2. Deploy your projects"

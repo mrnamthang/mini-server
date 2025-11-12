@@ -1,0 +1,160 @@
+---
+# Global variables for all hosts
+
+# =============================================================================
+# DOMAIN CONFIGURATION
+# =============================================================================
+base_domain: "local"
+traefik_dashboard_domain: "traefik.{{ base_domain }}"
+
+# Project domains (for local access)
+flow_domain: "flow.{{ base_domain }}"
+flow_api_domain: "api.flow.{{ base_domain }}"
+tradewhispr_domain: "tradewhispr.{{ base_domain }}"
+tradewhispr_api_domain: "api.tradewhispr.{{ base_domain }}"
+
+# =============================================================================
+# SSL/TLS CONFIGURATION
+# =============================================================================
+# For local development, we'll use self-signed certs
+# For production, Traefik will use Let's Encrypt
+letsencrypt_email: "your-email@example.com"  # CHANGE THIS for production
+letsencrypt_staging: true  # Set to false for production certs
+
+# =============================================================================
+# DIRECTORY STRUCTURE
+# =============================================================================
+projects_base_dir: "/opt/projects"
+traefik_config_dir: "/opt/traefik"
+docker_data_dir: "/opt/docker-data"
+
+# Project-specific directories
+flow_project_dir: "{{ projects_base_dir }}/flow"
+tradewhispr_project_dir: "{{ projects_base_dir }}/tradewhispr"
+
+# Data directories
+flow_data_dir: "{{ docker_data_dir }}/flow"
+tradewhispr_data_dir: "{{ docker_data_dir }}/tradewhispr"
+
+# =============================================================================
+# DOCKER CONFIGURATION
+# =============================================================================
+docker_edition: "ce"
+docker_compose_version: "2.24.5"
+docker_users:
+  - "{{ ansible_user }}"
+
+# Docker networks
+traefik_network: "traefik-public"
+
+# =============================================================================
+# SECURITY CONFIGURATION
+# =============================================================================
+# UFW Firewall rules
+ufw_enabled: true
+ufw_default_incoming: "deny"
+ufw_default_outgoing: "allow"
+ufw_rules:
+  - { port: 22, proto: tcp, rule: allow, comment: "SSH" }
+  - { port: 80, proto: tcp, rule: allow, comment: "HTTP" }
+  - { port: 443, proto: tcp, rule: allow, comment: "HTTPS" }
+
+# Fail2ban configuration
+fail2ban_enabled: true
+
+# =============================================================================
+# SYSTEM PACKAGES
+# =============================================================================
+# Essential packages to install
+essential_packages:
+  - apt-transport-https
+  - ca-certificates
+  - curl
+  - gnupg
+  - lsb-release
+  - software-properties-common
+  - git
+  - vim
+  - htop
+  - ncdu
+  - tmux
+  - wget
+  - unzip
+  - jq
+  - tree
+  - net-tools
+  - dnsutils
+  - build-essential
+
+# Development packages
+dev_packages:
+  - python3
+  - python3-pip
+  - python3-venv
+  - postgresql-client
+
+# =============================================================================
+# FLOW PROJECT CONFIGURATION
+# =============================================================================
+flow_enabled: true
+flow_git_repo: ""  # Add your Flow git repository URL
+flow_git_branch: "main"
+
+# Flow environment variables (add to projects/flow/.env)
+flow_env_vars:
+  ASPNETCORE_ENVIRONMENT: "Production"
+  ASPNETCORE_URLS: "http://+:5000"
+  ConnectionStrings__DefaultConnection: "Host=flow-db;Port=5432;Database=flowdb;Username=flowuser;Password={{ flow_db_password }}"
+
+# Flow database configuration
+flow_db_name: "flowdb"
+flow_db_user: "flowuser"
+flow_db_password: "change-me-in-production"  # CHANGE THIS or use vault
+flow_db_version: "16"
+
+# =============================================================================
+# TRADEWHISPR PROJECT CONFIGURATION
+# =============================================================================
+tradewhispr_enabled: true
+tradewhispr_git_repo: ""  # Add your Tradewhispr git repository URL
+tradewhispr_git_branch: "main"
+
+# Tradewhispr environment variables
+tradewhispr_env_vars:
+  ENVIRONMENT: "production"
+  DATABASE_URL: "postgresql://tradewhispruser:{{ tradewhispr_db_password }}@tradewhispr-db:5432/tradewhisprdb"
+  REDIS_URL: "redis://tradewhispr-redis:6379/0"
+  CELERY_BROKER_URL: "redis://tradewhispr-redis:6379/0"
+  CELERY_RESULT_BACKEND: "redis://tradewhispr-redis:6379/0"
+
+# Tradewhispr database configuration
+tradewhispr_db_name: "tradewhisprdb"
+tradewhispr_db_user: "tradewhispruser"
+tradewhispr_db_password: "change-me-in-production"  # CHANGE THIS or use vault
+tradewhispr_db_version: "15"
+
+# =============================================================================
+# MONITORING & LOGGING (Optional)
+# =============================================================================
+# Set to true to install monitoring tools
+portainer_enabled: false
+portainer_domain: "portainer.{{ base_domain }}"
+
+# =============================================================================
+# BACKUP CONFIGURATION (Future)
+# =============================================================================
+backup_enabled: false
+backup_directory: "/opt/backups"
+backup_retention_days: 30
+
+# =============================================================================
+# TAILSCALE CONFIGURATION (Future)
+# =============================================================================
+tailscale_enabled: false
+tailscale_auth_key: ""  # Add your Tailscale auth key for automated setup
+
+# =============================================================================
+# NOTIFICATION CONFIGURATION (Future)
+# =============================================================================
+notification_enabled: false
+notification_webhook_url: ""  # Slack/Discord webhook for deployment notifications

@@ -1,0 +1,188 @@
+---
+# Traefik Reverse Proxy Setup Playbook
+# Deploys Traefik as the reverse proxy and load balancer
+
+- name: Setup Traefik Reverse Proxy
+  hosts: mini_servers
+  become: true
+  gather_facts: true
+
+  pre_tasks:
+    - name: Display Traefik setup info
+      ansible.builtin.debug:
+        msg:
+          - "Setting up Traefik on: {{ inventory_hostname }}"
+          - "Dashboard domain: {{ traefik_dashboard_domain }}"
+          - "Configuration directory: {{ traefik_config_dir }}"
+
+  tasks:
+    # =========================================================================
+    # PREREQUISITES CHECK
+    # =========================================================================
+    - name: Check if Docker is installed
+      ansible.builtin.command: docker --version
+      register: docker_check
+      changed_when: false
+      failed_when: docker_check.rc != 0
+      tags: [traefik, check]
+
+    - name: Check if Docker network exists
+      ansible.builtin.command: "docker network inspect {{ traefik_network }}"
+      register: network_check
+      changed_when: false
+      failed_when: false
+      tags: [traefik, check]
+
+    - name: Create Docker network if not exists
+      community.docker.docker_network:
+        name: "{{ traefik_network }}"
+        driver: bridge
+        state: present
+      when: network_check.rc != 0
+      tags: [traefik, network]
+
+    # =========================================================================
+    # DIRECTORY STRUCTURE
+    # =========================================================================
+    - name: Ensure Traefik directories exist
+      ansible.builtin.file:
+        path: "{{ item }}"
+        state: directory
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0755'
+      loop:
+        - "{{ traefik_config_dir }}"
+        - "{{ traefik_config_dir }}/dynamic"
+        - "{{ traefik_config_dir }}/certs"
+        - "{{ traefik_config_dir }}/logs"
+      tags: [traefik, directories]
+
+    # =========================================================================
+    # TRAEFIK CONFIGURATION FILES
+    # =========================================================================
+    - name: Copy Traefik static configuration
+      ansible.builtin.template:
+        src: ../../traefik/traefik.yml
+        dest: "{{ traefik_config_dir }}/traefik.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      tags: [traefik, config]
+
+    - name: Copy Traefik dynamic middleware configuration
+      ansible.builtin.copy:
+        src: ../../traefik/dynamic/middleware.yml
+        dest: "{{ traefik_config_dir }}/dynamic/middleware.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      tags: [traefik, config]
+
+    - name: Copy Traefik docker-compose file
+      ansible.builtin.template:
+        src: ../../traefik/docker-compose.yml
+        dest: "{{ traefik_config_dir }}/docker-compose.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      tags: [traefik, config]
+
+    # =========================================================================
+    # ACME CERTIFICATE STORAGE
+    # =========================================================================
+    - name: Create acme.json for Let's Encrypt certificates
+      ansible.builtin.file:
+        path: "{{ traefik_config_dir }}/acme.json"
+        state: touch
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0600'
+      tags: [traefik, certificates]
+
+    # =========================================================================
+    # UPDATE CONFIGURATION WITH VARIABLES
+    # =========================================================================
+    - name: Update Traefik configuration with Let's Encrypt email
+      ansible.builtin.replace:
+        path: "{{ traefik_config_dir }}/traefik.yml"
+        regexp: 'email: your-email@example.com'
+        replace: "email: {{ letsencrypt_email }}"
+      when: letsencrypt_email is defined
+      tags: [traefik, config]
+
+    - name: Update Traefik docker-compose with timezone
+      ansible.builtin.replace:
+        path: "{{ traefik_config_dir }}/docker-compose.yml"
+        regexp: 'TZ=America/Los_Angeles'
+        replace: "TZ={{ server_timezone | default('UTC') }}"
+      when: server_timezone is defined
+      tags: [traefik, config]
+
+    # =========================================================================
+    # DEPLOY TRAEFIK
+    # =========================================================================
+    - name: Pull Traefik image
+      community.docker.docker_image:
+        name: traefik:v3.0
+        source: pull
+      tags: [traefik, deploy]
+
+    - name: Start Traefik container
+      ansible.builtin.command:
+        cmd: docker-compose up -d
+        chdir: "{{ traefik_config_dir }}"
+      become_user: "{{ ansible_user }}"
+      tags: [traefik, deploy]
+
+    # =========================================================================
+    # VERIFICATION
+    # =========================================================================
+    - name: Wait for Traefik to be ready
+      ansible.builtin.wait_for:
+        host: localhost
+        port: 8080
+        delay: 5
+        timeout: 30
+      tags: [traefik, verify]
+
+    - name: Check Traefik container status
+      ansible.builtin.command: docker ps --filter name=traefik --format "{{ '{{' }}.Status{{ '}}' }}"
+      register: traefik_status
+      changed_when: false
+      tags: [traefik, verify]
+
+    - name: Get Traefik version
+      ansible.builtin.command: docker exec traefik traefik version
+      register: traefik_version
+      changed_when: false
+      tags: [traefik, verify]
+
+  post_tasks:
+    - name: Display Traefik information
+      ansible.builtin.debug:
+        msg:
+          - "✅ Traefik setup completed successfully!"
+          - ""
+          - "Traefik Information:"
+          - "  {{ traefik_version.stdout_lines[0] }}"
+          - "  Status: {{ traefik_status.stdout }}"
+          - ""
+          - "Access Points:"
+          - "  Dashboard: http://{{ traefik_dashboard_domain }} (port 8080)"
+          - "  HTTP: port 80"
+          - "  HTTPS: port 443"
+          - ""
+          - "⚠️  Add to your Mac's /etc/hosts:"
+          - "  {{ ansible_host }} {{ traefik_dashboard_domain }}"
+          - ""
+          - "Configuration:"
+          - "  Config Dir: {{ traefik_config_dir }}"
+          - "  Logs: {{ traefik_config_dir }}/logs"
+          - "  Network: {{ traefik_network }}"
+          - ""
+          - "Next steps:"
+          - "  1. Deploy Flow: make deploy-flow"
+          - "  2. Deploy Tradewhispr: make deploy-tradewhispr"
+          - ""
+          - "View logs with: docker logs traefik -f"
