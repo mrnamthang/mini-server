@@ -1,0 +1,28 @@
+[
+  {
+    "key": "cmd+shift+d",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🚀 Start Dev Mode (Auto)",
+    "when": "!inDebugMode"
+  },
+  {
+    "key": "cmd+shift+l",
+    "command": "workbench.action.tasks.runTask",
+    "args": "📋 View Logs"
+  },
+  {
+    "key": "cmd+shift+s",
+    "command": "workbench.action.tasks.runTask",
+    "args": "📊 Project Status"
+  },
+  {
+    "key": "cmd+shift+o",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🌐 Open in Browser"
+  },
+  {
+    "key": "cmd+shift+r",
+    "command": "workbench.action.tasks.runTask",
+    "args": "🔄 Restart Project"
+  }
+]

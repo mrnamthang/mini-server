@@ -1,0 +1,68 @@
+{
+  // Workspace settings for Mac ↔ Asus development
+
+  // Terminal
+  "terminal.integrated.defaultProfile.osx": "zsh",
+  "terminal.integrated.scrollback": 10000,
+
+  // Files
+  "files.watcherExclude": {
+    "**/node_modules/**": true,
+    "**/.git/objects/**": true,
+    "**/.git/subtree-cache/**": true,
+    "**/bin/**": true,
+    "**/obj/**": true,
+    "**/__pycache__/**": true,
+    "**/.pytest_cache/**": true,
+    "**/dist/**": true,
+    "**/build/**": true
+  },
+
+  // Auto-save for faster sync
+  "files.autoSave": "afterDelay",
+  "files.autoSaveDelay": 1000,
+
+  // Exclude from search
+  "search.exclude": {
+    "**/node_modules": true,
+    "**/bin": true,
+    "**/obj": true,
+    "**/__pycache__": true,
+    "**/dist": true,
+    "**/build": true
+  },
+
+  // Git
+  "git.autofetch": true,
+  "git.confirmSync": false,
+
+  // Remote development hint
+  "remote.SSH.remotePlatform": {
+    "192.168.1.10": "linux",
+    "asus-server": "linux"
+  },
+
+  // Task runner
+  "task.autoDetect": "on",
+  "task.quickOpen.detail": true,
+  "task.quickOpen.showAll": true,
+
+  // Language specific
+  "[typescript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[javascript]": {
+    "editor.defaultFormatter": "esbenp.prettier-vscode",
+    "editor.formatOnSave": true
+  },
+  "[python]": {
+    "editor.formatOnSave": true,
+    "editor.codeActionsOnSave": {
+      "source.organizeImports": "explicit"
+    }
+  },
+  "[csharp]": {
+    "editor.formatOnSave": true
+  }
+}

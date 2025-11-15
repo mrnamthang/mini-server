@@ -44,7 +44,7 @@ Thumbs.db
 
 # IDE
 .idea/
-.vscode/
+# .vscode/ - Committed for workflow (infrastructure repo)
 *.iml
 
 # Project source code (should be in separate repos)

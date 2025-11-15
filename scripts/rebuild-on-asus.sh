@@ -25,7 +25,16 @@ if [ -z "$PROJECT" ] || [ -z "$SERVICE" ]; then
     exit 1
 fi
 
-ASUS_HOST="asus-server"  # Update with your server hostname/IP
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/../.dev-config"
+
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    ASUS_SSH_ALIAS="asus-server"
+    REMOTE_PROJECTS_DIR="/opt/projects"
+fi
 
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo -e "${YELLOW}🔨 Rebuilding $SERVICE on Asus server...${NC}"
@@ -34,7 +43,7 @@ echo ""
 
 # Build the service
 echo -e "${YELLOW}📦 Building Docker image...${NC}"
-ssh "$ASUS_HOST" "cd /opt/projects/$PROJECT && docker-compose build $SERVICE"
+ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECTS_DIR/$PROJECT && docker-compose build $SERVICE"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Build failed${NC}"
@@ -47,7 +56,7 @@ echo ""
 
 # Restart the service
 echo -e "${YELLOW}🔄 Restarting service...${NC}"
-ssh "$ASUS_HOST" "cd /opt/projects/$PROJECT && docker-compose up -d $SERVICE"
+ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECTS_DIR/$PROJECT && docker-compose up -d $SERVICE"
 
 if [ $? -ne 0 ]; then
     echo -e "${RED}❌ Restart failed${NC}"
@@ -63,7 +72,7 @@ sleep 3
 
 # Show service status
 echo -e "${BLUE}📊 Service status:${NC}"
-ssh "$ASUS_HOST" "docker ps --filter name=$SERVICE --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
+ssh "$ASUS_SSH_ALIAS" "docker ps --filter name=$SERVICE --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
 
 echo ""
 echo -e "${GREEN}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"

@@ -1,0 +1,20 @@
+# Development Configuration
+# Used by all development scripts
+
+# Asus Server Details
+ASUS_HOST="192.168.1.10"
+ASUS_USER="thang"
+ASUS_SSH_ALIAS="asus-server"
+
+# Local Development Paths (on Mac)
+LOCAL_PROJECTS_DIR="$HOME/projects"
+
+# Remote Paths (on Asus)
+REMOTE_PROJECTS_DIR="/opt/projects"
+
+# Sync Configuration
+SYNC_DELAY=2  # seconds to wait before syncing (batch changes)
+
+# Auto-rebuild Settings
+AUTO_REBUILD=true  # Automatically rebuild on backend changes
+AUTO_SHOW_LOGS=true  # Show logs after rebuild

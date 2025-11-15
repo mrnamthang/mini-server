@@ -1,0 +1,176 @@
+{
+  "version": "2.0.0",
+  "tasks": [
+    {
+      "label": "🚀 Start Dev Mode (Auto)",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/dev.sh",
+      "args": ["${input:projectName}", "auto"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false,
+        "clear": false
+      },
+      "isBackground": true,
+      "problemMatcher": [],
+      "group": {
+        "kind": "build",
+        "isDefault": true
+      }
+    },
+    {
+      "label": "🔄 Sync Only (No Rebuild)",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/dev.sh",
+      "args": ["${input:projectName}", "sync-only"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": false,
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "📋 View Logs",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/dev.sh",
+      "args": ["${input:projectName}", "logs-only"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "dedicated",
+        "showReuseMessage": false
+      },
+      "isBackground": true,
+      "problemMatcher": []
+    },
+    {
+      "label": "🔨 Force Rebuild",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/rebuild-on-asus.sh",
+      "args": ["${input:projectName}", "${input:serviceName}"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "📊 Project Status",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/projects.sh",
+      "args": ["status"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": false,
+        "clear": true
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "▶️ Start Project",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/projects.sh",
+      "args": ["start", "${input:projectName}"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "⏹️ Stop Project",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/projects.sh",
+      "args": ["stop", "${input:projectName}"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🔄 Restart Project",
+      "type": "shell",
+      "command": "${workspaceFolder}/scripts/projects.sh",
+      "args": ["restart", "${input:projectName}"],
+      "presentation": {
+        "echo": true,
+        "reveal": "always",
+        "focus": true,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🌐 Open in Browser",
+      "type": "shell",
+      "command": "open",
+      "args": ["http://${input:projectName}.local"],
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    },
+    {
+      "label": "🎛️ Open Traefik Dashboard",
+      "type": "shell",
+      "command": "open",
+      "args": ["http://192.168.1.10:8080"],
+      "presentation": {
+        "echo": true,
+        "reveal": "silent",
+        "focus": false,
+        "panel": "shared",
+        "showReuseMessage": false
+      },
+      "problemMatcher": []
+    }
+  ],
+  "inputs": [
+    {
+      "id": "projectName",
+      "description": "Select project:",
+      "type": "pickString",
+      "options": [
+        "flow",
+        "tradewhispr",
+        "client-a",
+        "client-b",
+        "client-c",
+        "client-d"
+      ],
+      "default": "flow"
+    },
+    {
+      "id": "serviceName",
+      "description": "Service name (e.g., flow-api, flow-web):",
+      "type": "promptString",
+      "default": "flow-api"
+    }
+  ]
+}

@@ -20,13 +20,24 @@ if [ -z "$PROJECT" ]; then
     exit 1
 fi
 
-# Configuration - Update these values
-ASUS_HOST="asus-server"  # Update with your server hostname/IP
-ASUS_USER="your-username"  # Update with your username
+# Load configuration
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+CONFIG_FILE="$SCRIPT_DIR/../.dev-config"
 
-# Get the actual project directory (assumes you cloned to ~/projects/)
-LOCAL_DIR="$HOME/projects/$PROJECT"
-REMOTE_DIR="/opt/projects/$PROJECT/src"
+if [ -f "$CONFIG_FILE" ]; then
+    source "$CONFIG_FILE"
+else
+    # Fallback to defaults
+    ASUS_HOST="192.168.1.10"
+    ASUS_USER="thang"
+    ASUS_SSH_ALIAS="asus-server"
+    LOCAL_PROJECTS_DIR="$HOME/projects"
+    REMOTE_PROJECTS_DIR="/opt/projects"
+fi
+
+# Get the actual project directory
+LOCAL_DIR="$LOCAL_PROJECTS_DIR/$PROJECT"
+REMOTE_DIR="$REMOTE_PROJECTS_DIR/$PROJECT/src"
 
 # Check if local directory exists
 if [ ! -d "$LOCAL_DIR" ]; then
@@ -39,6 +50,16 @@ echo -e "${YELLOW}📦 Syncing $PROJECT to Asus server...${NC}"
 echo "Local:  $LOCAL_DIR"
 echo "Remote: $ASUS_USER@$ASUS_HOST:$REMOTE_DIR"
 echo ""
+
+# Check SSH connectivity
+if ! ssh -q -o BatchMode=yes -o ConnectTimeout=5 "$ASUS_SSH_ALIAS" exit 2>/dev/null; then
+    echo -e "${RED}Error: Cannot connect to $ASUS_SSH_ALIAS${NC}"
+    echo "Please check:"
+    echo "  1. Server is running (ping $ASUS_HOST)"
+    echo "  2. SSH config in ~/.ssh/config"
+    echo "  3. SSH keys are set up"
+    exit 1
+fi
 
 # Rsync with exclusions
 rsync -avz --delete \
