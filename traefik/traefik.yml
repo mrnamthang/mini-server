@@ -9,6 +9,10 @@ api:
   dashboard: true  # Enable the dashboard
   insecure: true   # Allow access without authentication (local network only)
 
+# Ping endpoint for healthcheck
+ping:
+  entryPoint: "traefik"
+
 # =============================================================================
 # ENTRYPOINTS (Ports)
 # =============================================================================
