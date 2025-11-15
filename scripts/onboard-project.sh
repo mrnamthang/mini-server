@@ -230,6 +230,12 @@ case $PROJECT_TYPE in
         scp "$ASUS_USER@$ASUS_HOST:$REMOTE_SRC_DIR/docker-compose.yml" "$LOCAL_CONFIG_DIR/docker-compose.original.yml"
         cp "$LOCAL_CONFIG_DIR/docker-compose.original.yml" "$LOCAL_CONFIG_DIR/docker-compose.yml"
 
+        # Fix build context paths (project is in src/ subdirectory)
+        echo -e "${BLUE}ℹ️  Adjusting build context paths for src/ subdirectory${NC}"
+        sed -i.bak 's|context: \./|context: ./src/|g' "$LOCAL_CONFIG_DIR/docker-compose.yml"
+        sed -i.bak 's|context: \"\./|context: \"./src/|g' "$LOCAL_CONFIG_DIR/docker-compose.yml"
+        rm -f "$LOCAL_CONFIG_DIR/docker-compose.yml.bak"
+
         # Add Traefik network if not present
         if ! grep -q "traefik-public" "$LOCAL_CONFIG_DIR/docker-compose.yml"; then
             # Check if networks section already exists
