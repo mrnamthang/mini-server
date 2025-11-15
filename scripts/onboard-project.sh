@@ -349,36 +349,30 @@ echo ""
 # ============================================================================
 echo -e "${YELLOW}🚀 Step 5: Starting services...${NC}"
 
-ssh "$ASUS_SSH_ALIAS" << EOF
-    cd $REMOTE_PROJECT_DIR
-
-    # Start services
-    docker-compose up -d --build
-
-    # Laravel-specific setup
-    if [ "$PROJECT_TYPE" == "laravel" ]; then
-        echo "Running Laravel setup..."
-        sleep 5  # Wait for containers to be ready
-
-        # Install dependencies
-        docker-compose exec -T app composer install --no-dev --optimize-autoloader
-
-        # Generate app key if not exists
-        if ! docker-compose exec -T app test -f .env; then
-            docker-compose exec -T app cp .env.example .env || true
-        fi
-
-        docker-compose exec -T app php artisan key:generate --force || true
-
-        # Run migrations
-        docker-compose exec -T app php artisan migrate --force || echo "⚠️  Migrations failed (database might not be ready yet)"
-
-        # Set permissions
-        docker-compose exec -T app chmod -R 775 storage bootstrap/cache || true
-    fi
-EOF
+ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECT_DIR && docker-compose up -d --build"
 
 echo -e "${GREEN}✓ Services started${NC}"
+
+# Laravel-specific setup (run separately)
+if [ "$PROJECT_TYPE" == "laravel" ]; then
+    echo -e "${YELLOW}⚙️  Running Laravel setup...${NC}"
+    sleep 5  # Wait for containers to be ready
+
+    # Install dependencies
+    ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECT_DIR && docker-compose exec -T app composer install --no-dev --optimize-autoloader" || true
+
+    # Generate app key if not exists
+    ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECT_DIR && docker-compose exec -T app test -f .env || docker-compose exec -T app cp .env.example .env" || true
+    ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECT_DIR && docker-compose exec -T app php artisan key:generate --force" || true
+
+    # Run migrations
+    ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECT_DIR && docker-compose exec -T app php artisan migrate --force" || echo "⚠️  Migrations failed (database might not be ready yet)"
+
+    # Set permissions
+    ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECT_DIR && docker-compose exec -T app chmod -R 775 storage bootstrap/cache" || true
+
+    echo -e "${GREEN}✓ Laravel setup complete${NC}"
+fi
 echo ""
 
 # ============================================================================
