@@ -137,7 +137,23 @@ sudo nano /etc/hosts
 
 - **Flow**: http://flow.local
 - **Tradewhispr**: http://tradewhispr.local
-- **Traefik Dashboard**: http://traefik.local
+- **Traefik Dashboard**: http://192.168.1.10:8080 (or http://traefik.local)
+
+### Step 7: Start Development
+
+See **[WORKFLOW_QUICKSTART.md](WORKFLOW_QUICKSTART.md)** for the streamlined Mac↔Asus development workflow.
+
+**TL;DR:**
+```bash
+# Start development mode (one command!)
+./scripts/dev.sh flow
+
+# Edit code on Mac - everything else is automatic:
+# ✅ Auto-sync to Asus
+# ✅ Smart rebuild (backend only)
+# ✅ Frontend hot-reload
+# ✅ Auto-show logs
+```
 
 ## 📁 Project Structure
 
@@ -145,20 +161,24 @@ sudo nano /etc/hosts
 mini-server/
 ├── ansible/                        # Ansible infrastructure code
 │   ├── inventory/
-│   │   └── hosts.yml              # Server inventory
-│   ├── playbooks/
-│   │   ├── 01-bootstrap.yml       # Initial server setup
-│   │   ├── 02-docker.yml          # Docker installation
-│   │   ├── 03-traefik.yml         # Reverse proxy setup
-│   │   └── deploy-project.yml     # Project deployment
-│   ├── roles/                     # Reusable Ansible roles
-│   │   ├── common/                # Common server configuration
-│   │   ├── docker/                # Docker setup
-│   │   ├── traefik/               # Traefik configuration
-│   │   └── project-deploy/        # Project deployment logic
-│   ├── group_vars/
-│   │   └── all.yml                # Global variables
-│   └── ansible.cfg                # Ansible configuration
+│   │   ├── hosts.yml              # Server inventory
+│   │   └── group_vars/all.yml     # Global variables
+│   └── playbooks/
+│       ├── 01-bootstrap.yml       # Initial server setup
+│       ├── 02-docker.yml          # Docker installation
+│       ├── 03-traefik.yml         # Reverse proxy setup
+│       └── deploy-project.yml     # Project deployment
+├── scripts/                        # Development workflow scripts
+│   ├── dev.sh                     # 🚀 Main: Auto-sync + smart rebuild + logs
+│   ├── status.sh                  # 📊 Quick dashboard
+│   ├── onboard-project.sh         # 📦 Add new projects (auto-detects tech stack)
+│   ├── projects.sh                # 🎛️ Start/stop/status projects
+│   ├── sync-to-asus.sh            # Manual sync
+│   ├── rebuild-on-asus.sh         # Manual rebuild
+│   ├── logs.sh                    # View logs
+│   ├── debug-traefik.sh           # Troubleshooting
+│   ├── fix-port-80.sh             # Fix port conflicts
+│   └── restart-traefik.sh         # Restart Traefik
 ├── projects/                       # Project-specific configurations
 │   ├── flow/
 │   │   ├── docker-compose.yml     # Flow stack with Traefik labels
@@ -170,10 +190,15 @@ mini-server/
 │   ├── docker-compose.yml         # Traefik container
 │   ├── traefik.yml                # Static configuration
 │   └── dynamic/                   # Dynamic configuration
-├── provisioning/                   # Future: Fresh OS installation
-│   └── ubuntu-fresh-install.md    # Guide for wiping and reinstalling
-├── Makefile                        # Convenient commands
-└── README.md                       # This file
+├── .vscode/                        # VSCode integration
+│   ├── tasks.json                 # Pre-configured tasks
+│   ├── settings.json              # Optimized settings
+│   └── keybindings.json           # Keyboard shortcuts
+├── .dev-config                     # Centralized development config
+├── Makefile                        # Infrastructure commands
+├── README.md                       # This file
+├── WORKFLOW_QUICKSTART.md          # 🎯 Daily workflow guide (START HERE!)
+└── QUICKSTART.md                   # Initial setup guide
 ```
 
 ## 🛠️ Makefile Commands
@@ -206,35 +231,58 @@ make facts              # Gather server facts
 
 ## 🔧 Common Tasks
 
+### Daily Development Workflow
+
+**See [WORKFLOW_QUICKSTART.md](WORKFLOW_QUICKSTART.md) for complete guide**
+
+```bash
+# Start development mode (auto-sync, smart rebuild, logs)
+./scripts/dev.sh flow
+
+# View status dashboard
+./scripts/status.sh
+
+# Manage projects
+./scripts/projects.sh status
+./scripts/projects.sh start flow
+./scripts/projects.sh stop flow
+```
+
 ### Adding a New Project
 
-1. Create project directory: `projects/new-project/`
-2. Add `docker-compose.yml` with Traefik labels
-3. Create Ansible task in `playbooks/deploy-project.yml`
-4. Add Makefile target for deployment
-5. Update `/etc/hosts` on your Mac
+**Use the smart onboarding script:**
+
+```bash
+./scripts/onboard-project.sh
+
+# It will auto-detect your tech stack from docker-compose.yml
+# and generate all necessary files
+```
 
 ### Viewing Logs
 
 ```bash
-# SSH into the server
-ssh asus-server
+# Option 1: Via dev script (auto-follows)
+./scripts/dev.sh flow logs-only
 
-# View Traefik logs
-docker logs traefik -f
+# Option 2: Standalone log viewer
+./scripts/logs.sh flow
 
-# View Flow logs
-cd /opt/projects/flow && docker-compose logs -f
-
-# View Tradewhispr logs
-cd /opt/projects/tradewhispr && docker-compose logs -f
+# Option 3: SSH and view directly
+ssh asus-server "cd /opt/projects/flow && docker-compose logs -f"
 ```
 
-### Updating a Project
+### Manual Sync and Rebuild
 
 ```bash
-# From your Mac
-make deploy-flow        # Pulls latest changes and restarts
+# Manual sync from Mac to Asus
+./scripts/sync-to-asus.sh flow
+
+# Manual rebuild
+./scripts/rebuild-on-asus.sh flow flow-api
+
+# Via Ansible (less common now)
+make deploy-flow
 ```
 
 ## 🌐 Future: Public Internet Hosting
@@ -331,8 +379,13 @@ cd /opt/projects/flow && docker-compose logs
 docker-compose down && docker-compose up -d
 ```
 
-## 📚 Additional Resources
+## 📚 Documentation
 
+**Workflow & Development:**
+- **[WORKFLOW_QUICKSTART.md](WORKFLOW_QUICKSTART.md)** - Daily development workflow (START HERE!)
+- **[QUICKSTART.md](QUICKSTART.md)** - Initial infrastructure setup
+
+**Additional Resources:**
 - [Ansible Documentation](https://docs.ansible.com/)
 - [Traefik Documentation](https://doc.traefik.io/traefik/)
 - [Docker Documentation](https://docs.docker.com/)
