@@ -162,16 +162,16 @@ echo ""
 # ============================================================================
 echo -e "${YELLOW}🔍 Step 2: Analyzing project...${NC}"
 
-# Get file list from Asus
-FILES=$(ssh "$ASUS_SSH_ALIAS" "ls -1 $REMOTE_SRC_DIR" 2>/dev/null || echo "")
-
-# Detect tech stack
+# Get file list from Asus and detect tech stack (disable exit on error temporarily)
+set +e
+FILES=$(ssh "$ASUS_SSH_ALIAS" "ls -1 $REMOTE_SRC_DIR 2>/dev/null")
 HAS_DOCKER_COMPOSE=$(echo "$FILES" | grep -E "^docker-compose\.ya?ml$" && echo "yes" || echo "")
 HAS_COMPOSER=$(echo "$FILES" | grep "^composer.json$" && echo "yes" || echo "")
 HAS_ARTISAN=$(ssh "$ASUS_SSH_ALIAS" "test -f $REMOTE_SRC_DIR/artisan && echo yes" || echo "")
 HAS_PACKAGE_JSON=$(echo "$FILES" | grep "^package.json$" && echo "yes" || echo "")
 HAS_REQUIREMENTS=$(echo "$FILES" | grep "^requirements.txt$" && echo "")
 HAS_MANAGE_PY=$(echo "$FILES" | grep "^manage.py$" && echo "yes" || echo "")
+set -e
 
 # Determine project type
 PROJECT_TYPE=""
@@ -183,8 +183,10 @@ elif [ -n "$HAS_COMPOSER" ] && [ -n "$HAS_ARTISAN" ]; then
     PROJECT_TYPE="laravel"
     echo -e "${GREEN}✓ Detected Laravel project${NC}"
 
-    # Detect PHP version from composer.json
+    # Detect PHP version from composer.json (disable exit on error temporarily)
+    set +e
     PHP_VERSION=$(ssh "$ASUS_SSH_ALIAS" "cat $REMOTE_SRC_DIR/composer.json 2>/dev/null | grep -oP '\"php\":\s*\"\^?\K[0-9]+\.[0-9]+'" || echo "8.2")
+    set -e
     echo -e "${BLUE}  → PHP Version: $PHP_VERSION${NC}"
 
     # Detect database preference
