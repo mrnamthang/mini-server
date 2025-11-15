@@ -62,6 +62,46 @@ echo "  Remote Path: $REMOTE_SRC_DIR"
 echo ""
 
 # ============================================================================
+# STEP 0: Ensure /opt/projects is accessible
+# ============================================================================
+echo -e "${YELLOW}🔐 Checking server permissions...${NC}"
+
+# Check if /opt/projects is writable
+CAN_WRITE=$(ssh "$ASUS_SSH_ALIAS" "test -w $REMOTE_PROJECTS_DIR && echo yes || echo no" 2>/dev/null || echo "no")
+
+if [ "$CAN_WRITE" = "no" ]; then
+    echo -e "${BLUE}ℹ️  Setting up /opt/projects directory (requires sudo)${NC}"
+    echo -e "${YELLOW}→ You'll be prompted for your sudo password on the remote server${NC}"
+
+    # Use -t flag to allocate TTY for sudo password prompt
+    ssh -t "$ASUS_SSH_ALIAS" << 'SETUP_EOF'
+        # Validate sudo access and cache credentials
+        sudo -v
+
+        # Create base directory if it doesn't exist
+        if [ ! -d /opt/projects ]; then
+            sudo mkdir -p /opt/projects
+        fi
+
+        # Make user owner of /opt/projects
+        sudo chown -R $USER:$USER /opt/projects
+
+        echo "✓ /opt/projects is now accessible"
+SETUP_EOF
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Server permissions configured${NC}"
+    else
+        echo -e "${RED}✗ Failed to configure permissions${NC}"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓ /opt/projects is accessible${NC}"
+fi
+
+echo ""
+
+# ============================================================================
 # STEP 1: Clone project to Asus
 # ============================================================================
 echo -e "${YELLOW}📦 Step 1: Cloning project to Asus server...${NC}"
