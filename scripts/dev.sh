@@ -87,6 +87,27 @@ if [ "$MODE" == "logs-only" ]; then
     exit 0
 fi
 
+# Ensure remote directory exists
+echo -e "${YELLOW}🔍 Checking remote directory...${NC}"
+if ! ssh "$ASUS_SSH_ALIAS" "test -d $REMOTE_DIR" 2>/dev/null; then
+    echo -e "${YELLOW}📁 Creating remote directory structure...${NC}"
+    ssh "$ASUS_SSH_ALIAS" "mkdir -p $REMOTE_DIR && chown $ASUS_USER:$ASUS_USER $REMOTE_DIR" 2>/dev/null || \
+        ssh "$ASUS_SSH_ALIAS" "sudo mkdir -p $REMOTE_DIR && sudo chown $ASUS_USER:$ASUS_USER $REMOTE_DIR"
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Remote directory created${NC}"
+    else
+        echo -e "${RED}Error: Failed to create remote directory${NC}"
+        echo "Please run on Asus server:"
+        echo "  sudo mkdir -p $REMOTE_DIR"
+        echo "  sudo chown $ASUS_USER:$ASUS_USER $REMOTE_DIR"
+        exit 1
+    fi
+else
+    echo -e "${GREEN}✓ Remote directory exists${NC}"
+fi
+echo ""
+
 # Initial sync
 echo -e "${YELLOW}🔄 Initial sync to Asus...${NC}"
 rsync -az --delete \
@@ -110,13 +131,22 @@ echo ""
 
 # Start services if not running
 echo -e "${YELLOW}🔍 Checking if services are running...${NC}"
-RUNNING=$(ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECTS_DIR/$PROJECT && docker-compose ps -q" 2>/dev/null || echo "")
-if [ -z "$RUNNING" ]; then
-    echo -e "${YELLOW}⚡ Starting services on Asus...${NC}"
-    ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECTS_DIR/$PROJECT && docker-compose up -d" 2>&1 | tail -5
-    echo -e "${GREEN}✓ Services started${NC}"
+
+# Check if docker-compose.yml exists
+if ! ssh "$ASUS_SSH_ALIAS" "test -f $REMOTE_PROJECTS_DIR/$PROJECT/docker-compose.yml" 2>/dev/null; then
+    echo -e "${YELLOW}⚠️  No docker-compose.yml found on Asus${NC}"
+    echo -e "${BLUE}ℹ️  Copy your docker-compose.yml to the server:${NC}"
+    echo -e "   scp projects/$PROJECT/docker-compose.yml $ASUS_USER@$ASUS_HOST:$REMOTE_PROJECTS_DIR/$PROJECT/"
+    echo ""
 else
-    echo -e "${GREEN}✓ Services already running${NC}"
+    RUNNING=$(ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECTS_DIR/$PROJECT && docker-compose ps -q" 2>/dev/null || echo "")
+    if [ -z "$RUNNING" ]; then
+        echo -e "${YELLOW}⚡ Starting services on Asus...${NC}"
+        ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECTS_DIR/$PROJECT && docker-compose up -d" 2>&1 | tail -5
+        echo -e "${GREEN}✓ Services started${NC}"
+    else
+        echo -e "${GREEN}✓ Services already running${NC}"
+    fi
 fi
 echo ""
 

@@ -61,6 +61,23 @@ if ! ssh -q -o BatchMode=yes -o ConnectTimeout=5 "$ASUS_SSH_ALIAS" exit 2>/dev/n
     exit 1
 fi
 
+# Ensure remote directory exists
+if ! ssh "$ASUS_SSH_ALIAS" "test -d $REMOTE_DIR" 2>/dev/null; then
+    echo -e "${YELLOW}📁 Creating remote directory...${NC}"
+    ssh "$ASUS_SSH_ALIAS" "mkdir -p $REMOTE_DIR && chown $ASUS_USER:$ASUS_USER $REMOTE_DIR" 2>/dev/null || \
+        ssh "$ASUS_SSH_ALIAS" "sudo mkdir -p $REMOTE_DIR && sudo chown $ASUS_USER:$ASUS_USER $REMOTE_DIR"
+
+    if [ $? -eq 0 ]; then
+        echo -e "${GREEN}✓ Remote directory created${NC}"
+    else
+        echo -e "${RED}Error: Failed to create remote directory${NC}"
+        echo "Please run on Asus server:"
+        echo "  sudo mkdir -p $REMOTE_DIR"
+        echo "  sudo chown $ASUS_USER:$ASUS_USER $REMOTE_DIR"
+        exit 1
+    fi
+fi
+
 # Rsync with exclusions
 rsync -avz --delete \
   --exclude 'node_modules' \
