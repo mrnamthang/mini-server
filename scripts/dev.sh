@@ -132,13 +132,45 @@ echo ""
 # Start services if not running
 echo -e "${YELLOW}🔍 Checking if services are running...${NC}"
 
-# Check if docker-compose.yml exists
+# Check if docker-compose.yml exists on remote
 if ! ssh "$ASUS_SSH_ALIAS" "test -f $REMOTE_PROJECTS_DIR/$PROJECT/docker-compose.yml" 2>/dev/null; then
     echo -e "${YELLOW}⚠️  No docker-compose.yml found on Asus${NC}"
-    echo -e "${BLUE}ℹ️  Copy your docker-compose.yml to the server:${NC}"
-    echo -e "   scp projects/$PROJECT/docker-compose.yml $ASUS_USER@$ASUS_HOST:$REMOTE_PROJECTS_DIR/$PROJECT/"
-    echo ""
-else
+
+    # Check if we have it locally and can auto-copy it
+    SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+    LOCAL_COMPOSE="$SCRIPT_DIR/../projects/$PROJECT/docker-compose.yml"
+
+    if [ -f "$LOCAL_COMPOSE" ]; then
+        echo -e "${YELLOW}📄 Found docker-compose.yml locally, copying to Asus...${NC}"
+        scp "$LOCAL_COMPOSE" "$ASUS_USER@$ASUS_HOST:$REMOTE_PROJECTS_DIR/$PROJECT/" >/dev/null 2>&1
+
+        if [ $? -eq 0 ]; then
+            echo -e "${GREEN}✓ docker-compose.yml copied successfully${NC}"
+
+            # Also copy .env.example if it exists
+            LOCAL_ENV="$SCRIPT_DIR/../projects/$PROJECT/.env.example"
+            if [ -f "$LOCAL_ENV" ]; then
+                echo -e "${YELLOW}📄 Copying .env.example...${NC}"
+                scp "$LOCAL_ENV" "$ASUS_USER@$ASUS_HOST:$REMOTE_PROJECTS_DIR/$PROJECT/.env" >/dev/null 2>&1
+                if [ $? -eq 0 ]; then
+                    echo -e "${GREEN}✓ .env.example copied as .env${NC}"
+                    echo -e "${BLUE}ℹ️  Remember to edit .env on Asus with your actual values${NC}"
+                fi
+            fi
+        else
+            echo -e "${RED}✗ Failed to copy docker-compose.yml${NC}"
+            echo -e "${BLUE}ℹ️  Manual copy: scp projects/$PROJECT/docker-compose.yml $ASUS_USER@$ASUS_HOST:$REMOTE_PROJECTS_DIR/$PROJECT/${NC}"
+            echo ""
+        fi
+    else
+        echo -e "${BLUE}ℹ️  Copy your docker-compose.yml to the server:${NC}"
+        echo -e "   scp projects/$PROJECT/docker-compose.yml $ASUS_USER@$ASUS_HOST:$REMOTE_PROJECTS_DIR/$PROJECT/"
+        echo ""
+    fi
+fi
+
+# Try to start services if docker-compose.yml exists now
+if ssh "$ASUS_SSH_ALIAS" "test -f $REMOTE_PROJECTS_DIR/$PROJECT/docker-compose.yml" 2>/dev/null; then
     RUNNING=$(ssh "$ASUS_SSH_ALIAS" "cd $REMOTE_PROJECTS_DIR/$PROJECT && docker-compose ps -q" 2>/dev/null || echo "")
     if [ -z "$RUNNING" ]; then
         echo -e "${YELLOW}⚡ Starting services on Asus...${NC}"
