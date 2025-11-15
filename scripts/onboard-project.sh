@@ -18,8 +18,16 @@ echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━�
 echo ""
 
 # Load configuration
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-CONFIG_FILE="$SCRIPT_DIR/../.dev-config"
+# Resolve symlinks to find the actual script location
+SCRIPT_PATH="${BASH_SOURCE[0]}"
+while [ -L "$SCRIPT_PATH" ]; do
+    SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+    SCRIPT_PATH="$(readlink "$SCRIPT_PATH")"
+    [[ $SCRIPT_PATH != /* ]] && SCRIPT_PATH="$SCRIPT_DIR/$SCRIPT_PATH"
+done
+SCRIPT_DIR="$(cd "$(dirname "$SCRIPT_PATH")" && pwd)"
+REPO_ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
+CONFIG_FILE="$REPO_ROOT/.dev-config"
 
 if [ -f "$CONFIG_FILE" ]; then
     source "$CONFIG_FILE"
@@ -211,7 +219,7 @@ echo ""
 # ============================================================================
 echo -e "${YELLOW}🔧 Step 3: Setting up Docker configuration...${NC}"
 
-LOCAL_CONFIG_DIR="$SCRIPT_DIR/../projects/$PROJECT_NAME"
+LOCAL_CONFIG_DIR="$REPO_ROOT/projects/$PROJECT_NAME"
 mkdir -p "$LOCAL_CONFIG_DIR"
 
 case $PROJECT_TYPE in
@@ -238,7 +246,7 @@ case $PROJECT_TYPE in
         echo -e "${BLUE}ℹ️  Generating Laravel Docker stack...${NC}"
 
         # Copy template and replace variables
-        TEMPLATE_DIR="$SCRIPT_DIR/../templates/laravel"
+        TEMPLATE_DIR="$REPO_ROOT/templates/laravel"
 
         # Prepare database configuration
         DB_IMAGE="mysql:8.0"
