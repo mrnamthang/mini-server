@@ -59,14 +59,13 @@ if [ -z "$DOMAIN" ]; then
 fi
 
 REMOTE_PROJECT_DIR="$REMOTE_PROJECTS_DIR/$PROJECT_NAME"
-REMOTE_SRC_DIR="$REMOTE_PROJECT_DIR/src"
 
 echo ""
 echo -e "${YELLOW}📋 Project Configuration:${NC}"
 echo "  Name: $PROJECT_NAME"
 echo "  Domain: $DOMAIN"
 echo "  Git Repo: ${GIT_REPO:-Manual deployment}"
-echo "  Remote Path: $REMOTE_SRC_DIR"
+echo "  Remote Path: $REMOTE_PROJECT_DIR"
 echo ""
 
 # ============================================================================
@@ -119,16 +118,13 @@ if [[ "$GIT_REPO" =~ ^(https?|git)://|^git@ ]]; then
     echo -e "${BLUE}ℹ️  Cloning from: $GIT_REPO${NC}"
 
     ssh "$ASUS_SSH_ALIAS" << EOF
-        # Create directory (now in /opt/projects which user owns)
-        mkdir -p $REMOTE_PROJECT_DIR
-
         # Clone repository
-        if [ -d "$REMOTE_SRC_DIR" ]; then
+        if [ -d "$REMOTE_PROJECT_DIR" ]; then
             echo "Directory exists, pulling latest changes..."
-            cd $REMOTE_SRC_DIR
+            cd $REMOTE_PROJECT_DIR
             git pull
         else
-            git clone $GIT_REPO $REMOTE_SRC_DIR
+            git clone $GIT_REPO $REMOTE_PROJECT_DIR
         fi
 EOF
 
@@ -146,7 +142,7 @@ elif [ -d "$GIT_REPO" ]; then
     # Local directory provided - rsync to Asus
     echo -e "${BLUE}ℹ️  Syncing from local: $GIT_REPO${NC}"
 
-    ssh "$ASUS_SSH_ALIAS" "mkdir -p $REMOTE_SRC_DIR"
+    ssh "$ASUS_SSH_ALIAS" "mkdir -p $REMOTE_PROJECT_DIR"
 
     rsync -az --delete \
         --exclude 'node_modules' \
@@ -156,7 +152,7 @@ elif [ -d "$GIT_REPO" ]; then
         --exclude 'obj' \
         --exclude '__pycache__' \
         --exclude '.env' \
-        "$GIT_REPO/" "$ASUS_USER@$ASUS_HOST:$REMOTE_SRC_DIR/"
+        "$GIT_REPO/" "$ASUS_USER@$ASUS_HOST:$REMOTE_PROJECT_DIR/"
 
     echo -e "${GREEN}✓ Project synced to Asus${NC}"
 else
@@ -172,10 +168,10 @@ echo -e "${YELLOW}🔍 Step 2: Analyzing project...${NC}"
 
 # Get file list from Asus and detect tech stack (disable exit on error temporarily)
 set +e
-FILES=$(ssh "$ASUS_SSH_ALIAS" "ls -1 $REMOTE_SRC_DIR 2>/dev/null")
+FILES=$(ssh "$ASUS_SSH_ALIAS" "ls -1 $REMOTE_PROJECT_DIR 2>/dev/null")
 HAS_DOCKER_COMPOSE=$(echo "$FILES" | grep -E "^docker-compose\.ya?ml$" && echo "yes" || echo "")
 HAS_COMPOSER=$(echo "$FILES" | grep "^composer.json$" && echo "yes" || echo "")
-HAS_ARTISAN=$(ssh "$ASUS_SSH_ALIAS" "test -f $REMOTE_SRC_DIR/artisan && echo yes" || echo "")
+HAS_ARTISAN=$(ssh "$ASUS_SSH_ALIAS" "test -f $REMOTE_PROJECT_DIR/artisan && echo yes" || echo "")
 HAS_PACKAGE_JSON=$(echo "$FILES" | grep "^package.json$" && echo "yes" || echo "")
 HAS_REQUIREMENTS=$(echo "$FILES" | grep "^requirements.txt$" && echo "")
 HAS_MANAGE_PY=$(echo "$FILES" | grep "^manage.py$" && echo "yes" || echo "")
@@ -193,7 +189,7 @@ elif [ -n "$HAS_COMPOSER" ] && [ -n "$HAS_ARTISAN" ]; then
 
     # Detect PHP version from composer.json (disable exit on error temporarily)
     set +e
-    PHP_VERSION=$(ssh "$ASUS_SSH_ALIAS" "cat $REMOTE_SRC_DIR/composer.json 2>/dev/null | grep -oP '\"php\":\s*\"\^?\K[0-9]+\.[0-9]+'" || echo "8.2")
+    PHP_VERSION=$(ssh "$ASUS_SSH_ALIAS" "cat $REMOTE_PROJECT_DIR/composer.json 2>/dev/null | grep -oP '\"php\":\s*\"\^?\K[0-9]+\.[0-9]+'" || echo "8.2")
     set -e
     echo -e "${BLUE}  → PHP Version: $PHP_VERSION${NC}"
 
@@ -227,14 +223,8 @@ case $PROJECT_TYPE in
         echo -e "${BLUE}ℹ️  Using existing docker-compose.yml${NC}"
 
         # Download existing compose file
-        scp "$ASUS_USER@$ASUS_HOST:$REMOTE_SRC_DIR/docker-compose.yml" "$LOCAL_CONFIG_DIR/docker-compose.original.yml"
+        scp "$ASUS_USER@$ASUS_HOST:$REMOTE_PROJECT_DIR/docker-compose.yml" "$LOCAL_CONFIG_DIR/docker-compose.original.yml"
         cp "$LOCAL_CONFIG_DIR/docker-compose.original.yml" "$LOCAL_CONFIG_DIR/docker-compose.yml"
-
-        # Fix build context paths (project is in src/ subdirectory)
-        echo -e "${BLUE}ℹ️  Adjusting build context paths for src/ subdirectory${NC}"
-        sed -i.bak 's|context: \./|context: ./src/|g' "$LOCAL_CONFIG_DIR/docker-compose.yml"
-        sed -i.bak 's|context: \"\./|context: \"./src/|g' "$LOCAL_CONFIG_DIR/docker-compose.yml"
-        rm -f "$LOCAL_CONFIG_DIR/docker-compose.yml.bak"
 
         # Add Traefik network if not present
         if ! grep -q "traefik-public" "$LOCAL_CONFIG_DIR/docker-compose.yml"; then
