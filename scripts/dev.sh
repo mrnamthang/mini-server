@@ -47,7 +47,7 @@ if [ -z "$PROJECT" ]; then
 fi
 
 LOCAL_DIR="$LOCAL_PROJECTS_DIR/$PROJECT"
-REMOTE_DIR="$REMOTE_PROJECTS_DIR/$PROJECT/src"
+REMOTE_DIR="$REMOTE_PROJECTS_DIR/$PROJECT"
 
 # Check if fswatch is installed
 if [ "$MODE" != "logs-only" ] && ! command -v fswatch &> /dev/null; then

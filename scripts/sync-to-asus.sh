@@ -37,7 +37,7 @@ fi
 
 # Get the actual project directory
 LOCAL_DIR="$LOCAL_PROJECTS_DIR/$PROJECT"
-REMOTE_DIR="$REMOTE_PROJECTS_DIR/$PROJECT/src"
+REMOTE_DIR="$REMOTE_PROJECTS_DIR/$PROJECT"
 
 # Check if local directory exists
 if [ ! -d "$LOCAL_DIR" ]; then
