@@ -1,417 +1,614 @@
-# Development Helper Scripts
+# Scripts Guide
 
-These scripts streamline the development workflow between your Mac and the Asus mini server.
+This directory contains automation scripts for managing your Asus mini-server development workflow. Each script serves a specific purpose and can be used standalone or as part of your daily workflow.
 
-## 🚀 Quick Setup
+## 🚀 Quick Start
 
-### Step 1: Configure Scripts
+### First Time Setup
 
-Run the setup script to configure your server details:
+1. **Onboard your first project:**
+   ```bash
+   ./onboard-project.sh
+   ```
+   This will prompt for sudo password **once** to setup `/opt/projects`, then guide you through cloning and deploying your project.
 
-```bash
-cd scripts
-chmod +x setup-scripts.sh
-./setup-scripts.sh
-```
+2. **(Optional) Make scripts globally available:**
+   See [MAKE_SCRIPTS_GLOBAL.md](../MAKE_SCRIPTS_GLOBAL.md) for instructions on creating symlinks.
 
-This will prompt for:
-- Asus server hostname/IP
-- Your username on the server
+## 📜 Scripts Reference
 
-### Step 2: Test Connection
+### 🎯 Primary Workflow Scripts
 
-The setup script will automatically test SSH connection. If it fails:
+These are the main scripts you'll use daily:
 
-```bash
-# Copy your SSH key to the server
-ssh-copy-id your-username@asus-server-ip
-```
-
-## 📜 Available Scripts
-
-### 1. `sync-to-asus.sh` - Manual Sync
-
-Sync your local project to the Asus server.
-
-```bash
-# Sync Flow project
-./sync-to-asus.sh flow
-
-# Sync Tradewhispr project
-./sync-to-asus.sh tradewhispr
-```
+#### `onboard-project.sh` - Smart Project Onboarding
+**When to use:** First time setting up a new project on the Asus server
 
 **What it does:**
-- Syncs all files from `~/projects/{project}` to server
-- Excludes unnecessary files (node_modules, .git, etc.)
+- Prompts for sudo password **once** to setup `/opt/projects` (first run only)
+- Clones git repository to Asus server automatically
+- Auto-detects project type (Laravel, Docker, Node.js, Django)
+- Generates Docker configuration from templates
+- Creates docker-compose.yml with Traefik integration
+- Configures domains (project.local, api.project.local)
+- Deploys and starts all services
+
+**Usage:**
+```bash
+./onboard-project.sh
+
+# Or if symlinked globally:
+onboard
+```
+
+**Interactive prompts:**
+- Git repository URL (e.g., `git@github.com:user/project.git`)
+- Project name (auto-detected from URL)
+- Domain (defaults to `<project>.local`)
+
+**Example:**
+```bash
+$ ./onboard-project.sh
+Git repository URL: git@github.com:mrnamthang/handover.git
+Project name: handover
+Domain: handover.local
+
+✓ Cloned to /opt/projects/handover
+✓ Detected Laravel project (PHP 8.2)
+✓ Generated Docker stack (Nginx, PHP-FPM, MySQL, Redis)
+✓ Deployed and started all services
+```
+
+**First run:** Prompts for sudo password to setup `/opt/projects`
+**Subsequent runs:** No sudo password needed
+
+---
+
+#### `dev.sh` - Unified Development Workflow
+**When to use:** Active development - edit on Mac, run on Asus
+
+**What it does:**
+- Watches local files for changes
+- Auto-syncs to Asus server
+- Smart rebuild detection (rebuilds only when needed)
+- Shows logs in real-time
+- All-in-one development experience
+
+**Usage:**
+```bash
+./dev.sh <project> [mode]
+
+# Modes:
+#   auto       - Watch, sync, smart rebuild, logs (default)
+#   sync-only  - Only watch and sync (no rebuild)
+#   logs-only  - Only show logs (no sync)
+```
+
+**Examples:**
+```bash
+# Full auto mode (recommended)
+./dev.sh handover
+
+# Just sync, no rebuild
+./dev.sh handover sync-only
+
+# Just show logs
+./dev.sh handover logs-only
+```
+
+**Smart rebuild logic:**
+- Frontend changes (JS, CSS, HTML) → sync only
+- Backend changes (PHP, Python, C#) → sync + rebuild
+- Dependencies (composer.json, package.json) → sync + rebuild
+
+---
+
+#### `sync-to-asus.sh` - Manual Sync
+**When to use:** Manual one-time sync without watching
+
+**What it does:**
+- Syncs local project to Asus server
 - Uses rsync for fast incremental updates
+- Excludes unnecessary files (node_modules, .git, etc.)
 
-### 2. `watch-and-sync.sh` - Auto Sync
-
-Watch for changes and automatically sync to Asus.
-
+**Usage:**
 ```bash
-# Watch Flow project
-./watch-and-sync.sh flow
-
-# Watch Tradewhispr project
-./watch-and-sync.sh tradewhispr
+./sync-to-asus.sh <project>
 ```
+
+**Example:**
+```bash
+./sync-to-asus.sh handover
+```
+
+---
+
+### 🔧 Management Scripts
+
+#### `projects.sh` - Multi-Project Management
+**When to use:** Managing multiple projects at once
 
 **What it does:**
-- Monitors your project directory for changes
-- Automatically syncs changes to Asus (2-second delay for batching)
-- Runs in foreground - run in separate terminal or tmux pane
+- Shows status of all projects
+- Start/stop/restart projects
+- Quick overview of running services
 
-**Requirements:**
-- `fswatch` must be installed: `brew install fswatch`
-
-**Recommended usage:**
+**Usage:**
 ```bash
-# Run in background terminal or tmux pane
-tmux new -s sync
-./watch-and-sync.sh flow
-# Detach: Ctrl+b, then d
+./projects.sh [status|start|stop|restart] [project]
+
+# Show all projects
+./projects.sh status
+
+# Restart specific project
+./projects.sh restart handover
+
+# Stop all projects
+./projects.sh stop
 ```
 
-### 3. `rebuild-on-asus.sh` - Rebuild Service
+---
 
-Rebuild and restart a Docker service on Asus.
-
-```bash
-# Flow examples
-./rebuild-on-asus.sh flow flow-api
-./rebuild-on-asus.sh flow flow-web
-
-# Tradewhispr examples
-./rebuild-on-asus.sh tradewhispr tradewhispr-backend
-./rebuild-on-asus.sh tradewhispr tradewhispr-frontend
-./rebuild-on-asus.sh tradewhispr tradewhispr-celery-worker
-```
+#### `status.sh` - Server Dashboard
+**When to use:** Quick health check of server and services
 
 **What it does:**
-- Builds Docker image on Asus
-- Restarts the service
-- Shows service status
+- Server health (CPU, memory, disk usage)
+- Running containers overview
+- Traefik status
+- Docker network info
+- Resource usage per container
 
+**Usage:**
+```bash
+./status.sh
+```
+
+**Example output:**
+```
+🖥️  Server Health
+CPU Usage: 15%
+Memory: 8.2GB / 16GB (51%)
+Disk: 120GB / 512GB (23%)
+
+🐳 Running Containers
+handover-nginx
+handover-php
+handover-mysql
+handover-redis
+traefik
+
+🌐 Traefik Status
+✓ Running on ports 80, 443
+```
+
+---
+
+#### `logs.sh` - View Container Logs
+**When to use:** Debugging, monitoring application output
+
+**What it does:**
+- Shows last 100 lines of container logs
+- Follows logs in real-time (like `tail -f`)
+- Can view specific service or all services
+
+**Usage:**
+```bash
+./logs.sh <project> [service]
+
+# All services
+./logs.sh handover
+
+# Specific service
+./logs.sh handover handover-php
+./logs.sh handover handover-nginx
+```
+
+**Press Ctrl+C to stop following logs**
+
+---
+
+#### `rebuild-on-asus.sh` - Rebuild Containers
 **When to use:**
-- Backend code changes (API logic, database models, etc.)
-- Dependency changes (package.json, requirements.txt, .csproj)
+- Backend code changes
 - Dockerfile changes
-- Environment variable changes
+- Dependency updates
+- Configuration changes
+
+**What it does:**
+- Rebuilds Docker images on Asus
+- Restarts containers
+- Shows updated status
+
+**Usage:**
+```bash
+./rebuild-on-asus.sh <project> [service]
+
+# Rebuild entire project
+./rebuild-on-asus.sh handover
+
+# Rebuild specific service
+./rebuild-on-asus.sh handover handover-php
+```
 
 **Not needed for:**
-- Frontend hot-reload changes (automatic)
-- Configuration file changes (just restart with docker-compose)
+- Frontend hot-reload changes (automatic via dev server)
+- Simple file edits (just sync)
 
-### 4. `logs.sh` - View Logs
+---
 
-View logs from services running on Asus.
+### 🔐 Setup & Configuration Scripts
 
-```bash
-# All Flow services
-./logs.sh flow
-
-# Specific Flow service
-./logs.sh flow flow-api
-./logs.sh flow flow-web
-./logs.sh flow flow-db
-
-# All Tradewhispr services
-./logs.sh tradewhispr
-
-# Specific Tradewhispr service
-./logs.sh tradewhispr tradewhispr-backend
-./logs.sh tradewhispr tradewhispr-frontend
-./logs.sh tradewhispr tradewhispr-celery-worker
-./logs.sh tradewhispr tradewhispr-redis
-```
+#### `setup-git-on-asus.sh` - Git Configuration
+**When to use:** First time setting up Git on Asus server
 
 **What it does:**
-- Shows last 100 lines of logs
-- Follows logs in real-time (like `tail -f`)
-- Press Ctrl+C to stop
+- Configures Git username and email
+- Generates SSH key for GitHub/GitLab
+- Displays public key to add to GitHub
 
-## 🎯 Typical Workflows
-
-### Workflow 1: Full Stack Development
-
-**Terminal 1: Auto-sync**
+**Usage:**
 ```bash
-cd ~/projects/mini-server/scripts
-./watch-and-sync.sh flow
+./setup-git-on-asus.sh
 ```
 
-**Terminal 2: View logs**
+**Interactive prompts:**
+- Your name (for git commits)
+- Your email (for git commits)
+
+**One-time setup** - Only run when setting up Asus server initially
+
+---
+
+#### `secure-local.sh` - Local SSL/HTTPS Setup
+**When to use:** Need HTTPS for .local domains (PWA, Service Workers, etc.)
+
+**What it does:**
+- Installs mkcert (locally-trusted certificates)
+- Generates wildcard certificate for *.local
+- Configures Traefik for HTTPS
+- Updates project docker-compose.yml for HTTPS
+
+**Usage:**
 ```bash
-cd ~/projects/mini-server/scripts
-./logs.sh flow flow-api
+./secure-local.sh
 ```
 
-**Terminal 3: Development**
+**Requirements:**
+- Homebrew (Mac)
+- mkcert will be installed automatically
+
+**Result:**
+- `https://handover.local` works with no browser warnings
+- `https://api.handover.local` works with no browser warnings
+
+**Optional** - Most local development works fine with HTTP
+
+See [LOCAL_SSL_SETUP.md](../LOCAL_SSL_SETUP.md) for details
+
+---
+
+### 🐛 Troubleshooting Scripts
+
+#### `troubleshoot-404.sh` - Diagnose Routing Issues
+**When to use:** Getting 404 errors on .local domains
+
+**What it does:**
+- Checks if containers are running
+- Verifies Traefik labels
+- Tests DNS resolution (/etc/hosts)
+- Validates routing configuration
+- Shows detailed diagnostics
+
+**Usage:**
 ```bash
-cd ~/projects/flow
-code .  # Edit code in VS Code
+./troubleshoot-404.sh <project>
 ```
 
-Changes auto-sync → View logs → Test in browser (http://flow.local)
-
-### Workflow 2: Backend Development Only
-
+**Example:**
 ```bash
-# 1. Edit backend code
-cd ~/projects/flow/src/Flow.Api
-code Controllers/ProjectsController.cs
+./troubleshoot-404.sh handover
+```
+
+**Checks:**
+1. ✓ Containers running
+2. ✓ Traefik labels configured
+3. ✓ /etc/hosts entry exists
+4. ✓ Routing rules active
+5. ✓ Network connectivity
+
+---
+
+## 🎯 Common Workflows
+
+### Workflow 1: Onboarding New Project
+```bash
+# 1. Run onboard script (will prompt for sudo password once)
+./onboard-project.sh
+
+# Enter details:
+Git repository URL: git@github.com:user/my-app.git
+Project name: my-app
+Domain: my-app.local
+
+# 2. Add to /etc/hosts on Mac
+sudo sh -c 'echo "192.168.1.10 my-app.local api.my-app.local" >> /etc/hosts'
+
+# 3. Visit in browser
+open http://my-app.local
+```
+
+### Workflow 2: Daily Development
+```bash
+# Terminal 1: Run dev workflow
+./dev.sh handover
+
+# Edit code on Mac in VS Code
+# Changes auto-sync and rebuild as needed
+# Logs stream in real-time
+
+# Test in browser
+open http://handover.local
+```
+
+### Workflow 3: Backend Development
+```bash
+# 1. Edit code on Mac
+code ~/projects/handover/app/Http/Controllers/
 
 # 2. Sync changes
-cd ~/projects/mini-server/scripts
-./sync-to-asus.sh flow
+./sync-to-asus.sh handover
 
-# 3. Rebuild API
-./rebuild-on-asus.sh flow flow-api
+# 3. Rebuild backend
+./rebuild-on-asus.sh handover handover-php
 
 # 4. View logs
-./logs.sh flow flow-api
+./logs.sh handover handover-php
 
-# 5. Test
-curl http://api.flow.local/api/projects
+# 5. Test API
+curl http://api.handover.local/api/users
 ```
 
-### Workflow 3: Frontend Development Only
-
+### Workflow 4: Managing Multiple Projects
 ```bash
-# Option A: Frontend on Asus with hot-reload
-# 1. Start auto-sync
-./watch-and-sync.sh flow &
+# Check all projects
+./projects.sh status
 
-# 2. Edit code
-cd ~/projects/flow/src/flow-web
-code .
+# Restart specific project
+./projects.sh restart flow
 
-# 3. View in browser
-open http://flow.local
+# Stop all projects
+./projects.sh stop
 
-# Changes auto-sync and hot-reload on Asus
-
-
-# Option B: Frontend on Mac, backend on Asus
-# 1. Run frontend locally
-cd ~/projects/flow/src/flow-web
-npm install
-npm run dev
-
-# 2. Configure to use Asus backend
-echo "VITE_API_URL=http://api.flow.local" > .env.local
-
-# 3. Access
-open http://localhost:5173
+# Start specific project
+./projects.sh start handover
 ```
 
-### Workflow 4: Database Changes
-
+### Workflow 5: Debugging 404 Issues
 ```bash
-# 1. Edit migration/model
-cd ~/projects/flow/src/Flow.Domain
-code Entities/Project.cs
+# Run diagnostics
+./troubleshoot-404.sh handover
 
-# 2. Sync
-cd ~/projects/mini-server/scripts
-./sync-to-asus.sh flow
+# Check server status
+./status.sh
 
-# 3. Create migration
-ssh asus-server "docker exec flow-api dotnet ef migrations add AddNewField"
+# View Traefik logs
+./logs.sh traefik
 
-# 4. Apply migration
-ssh asus-server "docker exec flow-api dotnet ef database update"
-
-# 5. Rebuild API (if needed)
-./rebuild-on-asus.sh flow flow-api
+# Check project logs
+./logs.sh handover
 ```
+
+---
 
 ## 🔧 Configuration
 
-### Customizing Sync Exclusions
-
-Edit `sync-to-asus.sh` and modify the `rsync` command:
+### .dev-config File
+All scripts read configuration from `.dev-config` in the repository root:
 
 ```bash
-rsync -avz --delete \
-  --exclude 'node_modules' \
-  --exclude '.git' \
-  --exclude 'your-custom-exclusion' \  # Add here
-  ...
+ASUS_HOST="192.168.1.10"
+ASUS_USER="thang"
+ASUS_SSH_ALIAS="asus-server"
+REMOTE_PROJECTS_DIR="/opt/projects"
+LOCAL_PROJECTS_DIR="$HOME/projects"
 ```
 
-### Changing Project Location
+**First time:** Copy from `.dev-config.example` and customize
 
-If your projects are not in `~/projects/`, update the scripts:
+### SSH Configuration
+Add to `~/.ssh/config`:
 
-```bash
-# In sync-to-asus.sh
-LOCAL_DIR="$HOME/your-custom-path/$PROJECT"
-
-# In watch-and-sync.sh
-LOCAL_DIR="$HOME/your-custom-path/$PROJECT"
+```
+Host asus-server
+    HostName 192.168.1.10
+    User thang
+    IdentityFile ~/.ssh/id_ed25519
 ```
 
-### Custom Server Configuration
+---
 
-Update these variables in each script:
+## 📊 Script Comparison
 
+| Script | Purpose | Frequency | Sudo Required | Interactive |
+|--------|---------|-----------|---------------|-------------|
+| onboard-project.sh | Setup new project | Once per project | First run only | Yes |
+| dev.sh | Active development | Daily | No | Runs continuously |
+| sync-to-asus.sh | Manual sync | As needed | No | No |
+| projects.sh | Manage projects | As needed | No | No |
+| status.sh | Check health | As needed | No | No |
+| logs.sh | View logs | Debugging | No | Runs continuously |
+| rebuild-on-asus.sh | Rebuild services | After backend changes | No | No |
+| setup-git-on-asus.sh | Git setup | Once (initial setup) | On remote server | Yes |
+| secure-local.sh | HTTPS setup | Optional | Local Mac only | Yes |
+| troubleshoot-404.sh | Debug routing | When issues occur | No | No |
+
+---
+
+## 💡 Tips & Best Practices
+
+### 1. Use tmux for Persistent Sessions
 ```bash
-ASUS_HOST="your-server-hostname-or-ip"
-ASUS_USER="your-username"
+# Create new session
+tmux new -s dev
+
+# Split panes
+Ctrl+b, then "    # Horizontal split
+Ctrl+b, then %    # Vertical split
+
+# Switch panes
+Ctrl+b, then arrow keys
+
+# Detach
+Ctrl+b, then d
+
+# Reattach
+tmux attach -t dev
 ```
 
-Or use `setup-scripts.sh` to update all scripts at once.
+### 2. Create Shell Aliases
+Add to `~/.zshrc` or `~/.bashrc`:
 
-## 🐛 Troubleshooting
-
-### "Command not found: fswatch"
-
-Install fswatch:
 ```bash
-brew install fswatch
+# Quick access to scripts
+alias dev-handover='~/projects/mini-server/scripts/dev.sh handover'
+alias logs-handover='~/projects/mini-server/scripts/logs.sh handover'
+alias sync-handover='~/projects/mini-server/scripts/sync-to-asus.sh handover'
+alias rebuild-handover='~/projects/mini-server/scripts/rebuild-on-asus.sh handover'
+
+# Global commands (if symlinked)
+alias dev='dev.sh'
+alias sync='sync-to-asus.sh'
+alias rebuild='rebuild-on-asus.sh'
 ```
 
-### "Permission denied" when running scripts
-
-Make scripts executable:
+### 3. Typical Daily Setup
 ```bash
+# Terminal 1: Auto-sync development
+tmux new -s dev
+cd ~/projects/mini-server/scripts
+./dev.sh handover
+
+# Terminal 2: Edit code
+cd ~/projects/handover
+code .
+
+# Terminal 3: View logs
+tmux attach -t dev
+Ctrl+b "  # Split pane
+./logs.sh handover
+```
+
+### 4. Global Script Access
+For convenience, symlink scripts to `/usr/local/bin`:
+
+```bash
+sudo ln -s "$(pwd)/onboard-project.sh" /usr/local/bin/onboard
+sudo ln -s "$(pwd)/dev.sh" /usr/local/bin/dev
+sudo ln -s "$(pwd)/status.sh" /usr/local/bin/asus-status
+```
+
+Then use anywhere:
+```bash
+onboard           # Instead of ./onboard-project.sh
+dev handover      # Instead of ./dev.sh handover
+asus-status       # Instead of ./status.sh
+```
+
+See [MAKE_SCRIPTS_GLOBAL.md](../MAKE_SCRIPTS_GLOBAL.md) for details
+
+---
+
+## 🆘 Troubleshooting
+
+### "Permission denied" Errors
+```bash
+# Make scripts executable
 chmod +x *.sh
 ```
 
-### SSH connection fails
-
-1. Test SSH manually:
+### "Cannot connect to server"
 ```bash
-ssh your-username@asus-server-ip
+# Test SSH connection
+ssh asus-server
+
+# If fails, setup SSH keys
+ssh-copy-id thang@192.168.1.10
 ```
 
-2. If fails, copy SSH key:
+### "sudo password required"
 ```bash
-ssh-copy-id your-username@asus-server-ip
+# Run onboard script once to setup /opt/projects
+./onboard-project.sh
+
+# This will prompt for sudo password once, then you're done
 ```
 
-3. Verify SSH config (`~/.ssh/config`):
-```
-Host asus-server
-    HostName 192.168.1.100
-    User your-username
-    IdentityFile ~/.ssh/id_rsa
-```
-
-### Sync is slow
-
-1. Check network connection:
+### 404 Errors
 ```bash
-ping asus-server-ip
+# Run diagnostics
+./troubleshoot-404.sh handover
+
+# Check /etc/hosts
+cat /etc/hosts | grep handover
+
+# Add if missing
+sudo sh -c 'echo "192.168.1.10 handover.local api.handover.local" >> /etc/hosts'
 ```
 
-2. Use SSH compression (already enabled in scripts)
-
-3. Reduce sync frequency in `watch-and-sync.sh`:
+### Services Not Starting
 ```bash
-# Change -l 2 to -l 5 for 5-second delay
-fswatch -r -l 5 ...
+# Check server status
+./status.sh
+
+# Check project logs
+./logs.sh handover
+
+# Restart project
+./projects.sh restart handover
+
+# Rebuild if needed
+./rebuild-on-asus.sh handover
 ```
 
-### Changes not reflecting
-
-1. Verify sync completed:
-```bash
-./sync-to-asus.sh flow
-```
-
-2. Check if service is running:
-```bash
-ssh asus-server "docker ps | grep flow"
-```
-
-3. Rebuild service:
-```bash
-./rebuild-on-asus.sh flow flow-api
-```
-
-4. Clear browser cache (Cmd+Shift+R)
-
-### "No such file or directory" error
-
-Ensure projects are cloned to expected locations:
-
-```bash
-# Expected structure
-~/projects/
-├── mini-server/        # This repo
-│   └── scripts/        # These scripts
-├── flow/               # Flow project
-└── tradewhispr/        # Tradewhispr project
-```
-
-## 💡 Tips
-
-1. **Use tmux** for persistent terminals:
-```bash
-tmux new -s dev
-# Split panes: Ctrl+b, then "
-# Switch panes: Ctrl+b, then arrow keys
-# Detach: Ctrl+b, then d
-# Reattach: tmux attach -t dev
-```
-
-2. **Create shell aliases** in `~/.zshrc`:
-```bash
-alias sync-flow='~/projects/mini-server/scripts/sync-to-asus.sh flow'
-alias watch-flow='~/projects/mini-server/scripts/watch-and-sync.sh flow'
-alias rebuild-flow-api='~/projects/mini-server/scripts/rebuild-on-asus.sh flow flow-api'
-alias logs-flow='~/projects/mini-server/scripts/logs.sh flow'
-```
-
-3. **VS Code tasks** - Create `.vscode/tasks.json`:
-```json
-{
-  "version": "2.0.0",
-  "tasks": [
-    {
-      "label": "Sync to Asus",
-      "type": "shell",
-      "command": "${workspaceFolder}/../mini-server/scripts/sync-to-asus.sh flow",
-      "group": {
-        "kind": "build",
-        "isDefault": true
-      }
-    }
-  ]
-}
-```
-
-Then press Cmd+Shift+B to sync!
-
-4. **Monitor mode** - Watch logs and sync in one terminal:
-```bash
-# Terminal 1
-./watch-and-sync.sh flow
-
-# Terminal 2
-./logs.sh flow flow-api
-```
+---
 
 ## 📚 Related Documentation
 
-- [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) - Complete development workflow guide
-- [README.md](../README.md) - Main infrastructure documentation
-- [QUICKSTART.md](../QUICKSTART.md) - Quick setup guide
+- [WORKFLOW_QUICKSTART.md](../WORKFLOW_QUICKSTART.md) - Quick workflow overview
+- [VALET_TO_ASUS_MIGRATION.md](../VALET_TO_ASUS_MIGRATION.md) - Laravel Valet migration guide
+- [VSCODE_REMOTE_SSH.md](../VSCODE_REMOTE_SSH.md) - VS Code Remote-SSH setup
+- [LOCAL_SSL_SETUP.md](../LOCAL_SSL_SETUP.md) - HTTPS setup for .local domains
+- [MAKE_SCRIPTS_GLOBAL.md](../MAKE_SCRIPTS_GLOBAL.md) - Global script access
 
-## 🆘 Getting Help
+---
 
-If you encounter issues:
+## 🎓 Learning Path
 
-1. Check the [DEVELOPMENT_WORKFLOW.md](../DEVELOPMENT_WORKFLOW.md) troubleshooting section
-2. Test SSH connection manually
-3. Verify services are running: `make status`
-4. Check Traefik dashboard: http://traefik.local
-5. View service logs: `./logs.sh <project> <service>`
+**Day 1: Setup**
+1. Run `./setup-git-on-asus.sh` (one-time Git setup)
+2. Run `./onboard-project.sh` (setup first project)
+3. Add domain to `/etc/hosts` on Mac
+4. Test in browser
+
+**Day 2: Development Workflow**
+1. Try `./dev.sh <project>` for auto-sync development
+2. Edit code on Mac, watch it sync and rebuild
+3. Use `./logs.sh <project>` to debug
+
+**Day 3: Advanced**
+1. Setup tmux for multi-pane terminal
+2. Create shell aliases for common commands
+3. Explore `./status.sh` and `./projects.sh`
+4. Try `./secure-local.sh` for HTTPS (optional)
+
+**Day 4: Troubleshooting**
+1. Learn `./troubleshoot-404.sh` for debugging
+2. Understand when to use `./rebuild-on-asus.sh`
+3. Practice `./projects.sh` for multi-project management
 
 ---
 
 Happy coding! 🚀
+
+For questions or issues, check the troubleshooting section above or refer to the related documentation.

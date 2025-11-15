@@ -91,16 +91,13 @@ fi
 echo -e "${YELLOW}🔍 Checking remote directory...${NC}"
 if ! ssh "$ASUS_SSH_ALIAS" "test -d $REMOTE_DIR" 2>/dev/null; then
     echo -e "${YELLOW}📁 Creating remote directory structure...${NC}"
-    ssh "$ASUS_SSH_ALIAS" "mkdir -p $REMOTE_DIR && chown $ASUS_USER:$ASUS_USER $REMOTE_DIR" 2>/dev/null || \
-        ssh "$ASUS_SSH_ALIAS" "sudo mkdir -p $REMOTE_DIR && sudo chown $ASUS_USER:$ASUS_USER $REMOTE_DIR"
+    ssh "$ASUS_SSH_ALIAS" "mkdir -p $REMOTE_DIR"
 
     if [ $? -eq 0 ]; then
         echo -e "${GREEN}✓ Remote directory created${NC}"
     else
         echo -e "${RED}Error: Failed to create remote directory${NC}"
-        echo "Please run on Asus server:"
-        echo "  sudo mkdir -p $REMOTE_DIR"
-        echo "  sudo chown $ASUS_USER:$ASUS_USER $REMOTE_DIR"
+        echo -e "${YELLOW}Tip: Run 'onboard' first to setup project infrastructure${NC}"
         exit 1
     fi
 else
