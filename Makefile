@@ -40,27 +40,27 @@ setup: ## Complete setup (bootstrap + docker + traefik)
 
 bootstrap: ## Initial server configuration (security, packages, directories)
 	@echo "$(GREEN)Running bootstrap playbook...$(NC)"
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/01-bootstrap.yml
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/01-bootstrap.yml -K
 
 docker: ## Install Docker and Docker Compose
 	@echo "$(GREEN)Installing Docker...$(NC)"
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/02-docker.yml
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/02-docker.yml -K
 
 traefik: ## Setup Traefik reverse proxy
 	@echo "$(GREEN)Setting up Traefik...$(NC)"
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/03-traefik.yml
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/03-traefik.yml -K
 
 ##@ Project Deployment
 
 deploy-flow: ## Deploy Flow project (.NET 8 + React)
 	@echo "$(GREEN)Deploying Flow project...$(NC)"
 	@echo "$(YELLOW)Note: Ensure Flow source code is in /opt/projects/flow/src on the server$(NC)"
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/deploy-project.yml -e "project=flow"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/deploy-project.yml -e "project=flow" -K
 
 deploy-tradewhispr: ## Deploy Tradewhispr project (FastAPI + Vue 3)
 	@echo "$(GREEN)Deploying Tradewhispr project...$(NC)"
 	@echo "$(YELLOW)Note: Ensure Tradewhispr source code is in /opt/projects/tradewhispr/src on the server$(NC)"
-	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/deploy-project.yml -e "project=tradewhispr"
+	ansible-playbook -i $(INVENTORY) $(PLAYBOOK_DIR)/deploy-project.yml -e "project=tradewhispr" -K
 
 deploy-all: deploy-flow deploy-tradewhispr ## Deploy all projects
 
