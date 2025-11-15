@@ -108,7 +108,7 @@ logs-traefik: ## View Traefik logs (last 100 lines)
 
 ping: ## Test connectivity to server
 	@echo "$(GREEN)Testing connectivity...$(NC)"
-	ansible mini_servers -i $(INVENTORY) -m ping
+	ansible mini_servers -i $(INVENTORY) -m ping --become=false
 
 check: ## Check Ansible configuration
 	@echo "$(GREEN)Checking Ansible configuration...$(NC)"
@@ -116,7 +116,7 @@ check: ## Check Ansible configuration
 
 facts: ## Gather server facts
 	@echo "$(GREEN)Gathering server facts...$(NC)"
-	ansible mini_servers -i $(INVENTORY) -m setup
+	ansible mini_servers -i $(INVENTORY) -m setup --become=false
 
 status: ## Show status of all services
 	@echo "$(BLUE)Server Status:$(NC)"
