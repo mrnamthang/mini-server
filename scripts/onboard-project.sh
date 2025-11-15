@@ -232,11 +232,22 @@ case $PROJECT_TYPE in
 
         # Add Traefik network if not present
         if ! grep -q "traefik-public" "$LOCAL_CONFIG_DIR/docker-compose.yml"; then
-            echo "" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
-            echo "# Added by onboard-project.sh" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
-            echo "networks:" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
-            echo "  traefik-public:" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
-            echo "    external: true" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
+            # Check if networks section already exists
+            if grep -q "^networks:" "$LOCAL_CONFIG_DIR/docker-compose.yml"; then
+                echo -e "${YELLOW}⚠️  Networks section exists - adding traefik-public to it${NC}"
+                # Add traefik-public under existing networks section
+                sed -i.bak '/^networks:/a\
+  traefik-public:\
+    external: true' "$LOCAL_CONFIG_DIR/docker-compose.yml"
+                rm "$LOCAL_CONFIG_DIR/docker-compose.yml.bak"
+            else
+                echo -e "${BLUE}ℹ️  Adding Traefik network configuration${NC}"
+                echo "" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
+                echo "# Added by onboard-project.sh" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
+                echo "networks:" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
+                echo "  traefik-public:" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
+                echo "    external: true" >> "$LOCAL_CONFIG_DIR/docker-compose.yml"
+            fi
         fi
 
         echo -e "${GREEN}✓ Docker configuration copied${NC}"
