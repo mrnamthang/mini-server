@@ -71,9 +71,8 @@ if [[ "$GIT_REPO" =~ ^(https?|git)://|^git@ ]]; then
     echo -e "${BLUE}ℹ️  Cloning from: $GIT_REPO${NC}"
 
     ssh "$ASUS_SSH_ALIAS" << EOF
-        # Create directory
-        sudo mkdir -p $REMOTE_PROJECT_DIR
-        sudo chown $ASUS_USER:$ASUS_USER $REMOTE_PROJECT_DIR
+        # Create directory (now in /opt/projects which user owns)
+        mkdir -p $REMOTE_PROJECT_DIR
 
         # Clone repository
         if [ -d "$REMOTE_SRC_DIR" ]; then
@@ -99,7 +98,7 @@ elif [ -d "$GIT_REPO" ]; then
     # Local directory provided - rsync to Asus
     echo -e "${BLUE}ℹ️  Syncing from local: $GIT_REPO${NC}"
 
-    ssh "$ASUS_SSH_ALIAS" "sudo mkdir -p $REMOTE_SRC_DIR && sudo chown $ASUS_USER:$ASUS_USER $REMOTE_SRC_DIR"
+    ssh "$ASUS_SSH_ALIAS" "mkdir -p $REMOTE_SRC_DIR"
 
     rsync -az --delete \
         --exclude 'node_modules' \
