@@ -104,6 +104,23 @@
       tags: [bootstrap, ssh, security]
 
     # =========================================================================
+    # PASSWORDLESS SUDO FOR PROJECT MANAGEMENT
+    # =========================================================================
+    - name: Configure passwordless sudo for /opt/projects
+      ansible.builtin.copy:
+        dest: "/etc/sudoers.d/{{ ansible_user }}-projects"
+        content: |
+          # Allow {{ ansible_user }} to manage /opt/projects without password
+          {{ ansible_user }} ALL=(ALL) NOPASSWD: /bin/mkdir -p /opt/projects
+          {{ ansible_user }} ALL=(ALL) NOPASSWD: /bin/chown -R {{ ansible_user }}\:{{ ansible_user }} /opt/projects
+          {{ ansible_user }} ALL=(ALL) NOPASSWD: /bin/chmod -R * /opt/projects*
+        owner: root
+        group: root
+        mode: '0440'
+        validate: '/usr/sbin/visudo -cf %s'
+      tags: [bootstrap, sudo, security]
+
+    # =========================================================================
     # FIREWALL CONFIGURATION (UFW)
     # =========================================================================
     - name: Install UFW
