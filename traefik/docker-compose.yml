@@ -19,6 +19,7 @@ services:
       - "8080:8080"  # Dashboard
     environment:
       - TZ=America/Los_Angeles
+      - DOCKER_API_VERSION=1.44  # Fix for Docker API compatibility with Traefik v3
     volumes:
       # Docker socket (required for auto-discovery)
       - /var/run/docker.sock:/var/run/docker.sock:ro
