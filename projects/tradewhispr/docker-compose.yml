@@ -60,7 +60,7 @@ services:
     container_name: tradewhispr-backend
     restart: unless-stopped
     build:
-      context: ./src/backend
+      context: ./backend
       dockerfile: Dockerfile
     environment:
       - ENVIRONMENT=${ENVIRONMENT:-production}
@@ -144,7 +144,7 @@ services:
     container_name: tradewhispr-frontend
     restart: unless-stopped
     build:
-      context: ./src/frontend
+      context: ./frontend
       dockerfile: Dockerfile
       args:
         - VITE_API_URL=${VITE_API_URL:-http://api.tradewhispr.local}
