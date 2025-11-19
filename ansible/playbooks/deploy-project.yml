@@ -132,6 +132,7 @@
         repo: "{{ project_configs[project_name].git_repo }}"
         dest: "{{ project_configs[project_name].dir }}/src"
         version: "{{ project_configs[project_name].git_branch }}"
+        update: yes
         force: yes
       become_user: "{{ ansible_user }}"
       when:
@@ -144,6 +145,7 @@
         repo: "{{ project_configs[project_name].git_repo }}"
         dest: "{{ project_configs[project_name].dir }}/src"
         version: "{{ project_configs[project_name].git_branch }}"
+        update: yes
         force: yes
       become_user: "{{ ansible_user }}"
       when:
