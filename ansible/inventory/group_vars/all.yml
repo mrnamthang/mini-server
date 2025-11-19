@@ -117,7 +117,7 @@ flow_db_version: "16"
 # =============================================================================
 tradewhispr_enabled: true
 tradewhispr_git_repo: "git@github.com:mrnamthang/tradewhispr.git"  # Add your Tradewhispr git repository URL
-tradewhispr_git_branch: "main"
+tradewhispr_git_branch: "master"
 
 # Tradewhispr environment variables
 tradewhispr_env_vars:

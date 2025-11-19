@@ -1,4 +1,5 @@
 ---
+
 # Project Deployment Playbook
 # Deploys Flow or Tradewhispr projects to the mini-server
 # Usage: ansible-playbook deploy-project.yml -e "project=flow"
@@ -73,6 +74,16 @@
         mode: '0644'
       tags: [deploy, config]
 
+    - name: Copy docker-compose.dev.yml
+      ansible.builtin.copy:
+        src: "{{ playbook_dir }}/../../projects/{{ project_name }}/docker-compose.dev.yml"
+        dest: "{{ project_configs[project_name].dir }}/docker-compose.dev.yml"
+        owner: "{{ ansible_user }}"
+        group: "{{ ansible_user }}"
+        mode: '0644'
+      ignore_errors: yes
+      tags: [deploy, config]
+
     - name: Check if .env file exists
       ansible.builtin.stat:
         path: "{{ project_configs[project_name].dir }}/.env"
@@ -88,6 +99,14 @@
         mode: '0600'
         force: no
       when: not env_file.stat.exists
+      tags: [deploy, config]
+
+    - name: Ensure COMPOSE_PROFILES is set in .env
+      ansible.builtin.lineinfile:
+        path: "{{ project_configs[project_name].dir }}/.env"
+        regexp: '^COMPOSE_PROFILES='
+        line: 'COMPOSE_PROFILES=dev'
+      when: project_name == 'tradewhispr'
       tags: [deploy, config]
 
     - name: Display .env configuration reminder
@@ -186,7 +205,8 @@
 
     - name: Get running containers
       ansible.builtin.shell:
-        cmd: docker ps --filter name={{ project_name }} --format "{{ '{{' }}.Names{{ '}}' }}: {{ '{{' }}.Status{{ '}}' }}"
+        cmd: >
+          docker ps --filter name={{ project_name }} --format "{{ '{{' }}.Names{{ '}}' }}: {{ '{{' }}.Status{{ '}}' }}"
       register: container_status
       changed_when: false
       tags: [deploy, verify]
@@ -194,25 +214,25 @@
   post_tasks:
     - name: Display deployment summary
       ansible.builtin.debug:
-        msg:
-          - "✅ {{ project_name | title }} deployment completed!"
-          - ""
-          - "Container Status:"
-          - "{{ container_status.stdout_lines | join('\n') }}"
-          - ""
-          - "Access Points:"
-          - "{% if project_name == 'flow' %}"
-          - "  Frontend: http://{{ flow_domain }}"
-          - "  API: http://{{ flow_api_domain }}"
-          - "{% elif project_name == 'tradewhispr' %}"
-          - "  Frontend: http://{{ tradewhispr_domain }}"
-          - "  API: http://{{ tradewhispr_api_domain }}"
-          - "  API Docs: http://{{ tradewhispr_api_domain }}/docs"
-          - "{% endif %}"
-          - ""
-          - "Next steps:"
-          - "  1. Configure .env file: {{ project_configs[project_name].dir }}/.env"
-          - "  2. Update /etc/hosts on your Mac"
-          - "  3. Check logs: make logs-{{ project_name }}"
-          - "  4. Access Traefik dashboard: http://{{ traefik_dashboard_domain }}"
+        msg: |
+          ✅ {{ project_name | title }} deployment completed!
+
+          Container Status:
+          {{ container_status.stdout_lines | join('\n') }}
+
+          Access Points:
+          {% if project_name == 'flow' %}
+            Frontend: http://{{ flow_domain }}
+            API: http://{{ flow_api_domain }}
+          {% elif project_name == 'tradewhispr' %}
+            Frontend: http://{{ tradewhispr_domain }}
+            API: http://{{ tradewhispr_api_domain }}
+            API Docs: http://{{ tradewhispr_api_domain }}/docs
+          {% endif %}
+
+          Next steps:
+            1. Configure .env file: {{ project_configs[project_name].dir }}/.env
+            2. Update /etc/hosts on your Mac
+            3. Check logs: make logs-{{ project_name }}
+            4. Access Traefik dashboard: http://{{ traefik_dashboard_domain }}
       tags: [always]
