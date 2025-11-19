@@ -173,7 +173,7 @@ mini-server/
 │   ├── status.sh                  # 📊 Quick dashboard
 │   ├── onboard-project.sh         # 📦 Add new projects (auto-detects tech stack)
 │   ├── projects.sh                # 🎛️ Start/stop/status projects
-│   ├── sync-to-asus.sh            # Manual sync
+│   ├── projects.sh                # 🎛️ Start/stop/status projects
 │   ├── rebuild-on-asus.sh         # Manual rebuild
 │   ├── logs.sh                    # View logs
 │   ├── debug-traefik.sh           # Troubleshooting
@@ -272,18 +272,28 @@ make facts              # Gather server facts
 ssh asus-server "cd /opt/projects/flow && docker-compose logs -f"
 ```
 
-### Manual Sync and Rebuild
+### Git-based Deployment
 
-```bash
-# Manual sync from Mac to Asus
-./scripts/sync-to-asus.sh flow
+1. **Commit and Push**:
+   ```bash
+   git add .
+   git commit -m "Update feature"
+   git push origin main
+   ```
 
-# Manual rebuild
-./scripts/rebuild-on-asus.sh flow flow-api
+2. **Deploy to Server**:
+   ```bash
+   # Deploy Flow
+   make deploy-flow
 
-# Via Ansible (less common now)
-make deploy-flow
-```
+   # Deploy Tradewhispr
+   make deploy-tradewhispr
+   ```
+
+3. **View Logs**:
+   ```bash
+   make logs-tradewhispr
+   ```
 
 ## 🌐 Future: Public Internet Hosting
 

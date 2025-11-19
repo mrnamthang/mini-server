@@ -1,199 +1,154 @@
----
-# Tradewhispr Project - Docker Compose Configuration
-# FastAPI + Vue 3 Frontend + PostgreSQL 15 + Redis + Celery
-# Integrated with Traefik reverse proxy
-
-version: '3.8'
-
 services:
-  # ===========================================================================
-  # PostgreSQL 15 Database
-  # ===========================================================================
-  tradewhispr-db:
+  # PostgreSQL Database
+  db:
     image: postgres:15-alpine
     container_name: tradewhispr-db
-    restart: unless-stopped
     environment:
-      POSTGRES_DB: ${POSTGRES_DB:-tradewhisprdb}
-      POSTGRES_USER: ${POSTGRES_USER:-tradewhispruser}
-      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme}
-      PGDATA: /var/lib/postgresql/data/pgdata
+      POSTGRES_USER: ${POSTGRES_USER:-tradewhispr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradewhispr_dev_password}
+      POSTGRES_DB: ${POSTGRES_DB:-tradewhispr}
     volumes:
-      - tradewhispr-db-data:/var/lib/postgresql/data
-    networks:
-      - tradewhispr-internal
+      - postgres_data:/var/lib/postgresql/data
+    ports:
+      - "5433:5432"  # Changed to 5433 to avoid conflict with local PostgreSQL
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tradewhispruser} -d ${POSTGRES_DB:-tradewhisprdb}"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-tradewhispr}"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 10s
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - tradewhispr-network
 
-  # ===========================================================================
-  # Redis - Message Broker & Cache
-  # ===========================================================================
-  tradewhispr-redis:
+  # Redis Cache & Message Broker
+  redis:
     image: redis:7-alpine
     container_name: tradewhispr-redis
-    restart: unless-stopped
     command: redis-server --appendonly yes
     volumes:
-      - tradewhispr-redis-data:/data
-    networks:
-      - tradewhispr-internal
+      - redis_data:/data
+    ports:
+      - "6380:6379"  # Changed to 6380 to avoid conflict with other project
     healthcheck:
       test: ["CMD", "redis-cli", "ping"]
       interval: 10s
       timeout: 5s
       retries: 5
-      start_period: 5s
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+    networks:
+      - tradewhispr-network
 
-  # ===========================================================================
   # FastAPI Backend
-  # ===========================================================================
-  tradewhispr-backend:
-    image: tradewhispr-backend:latest
-    container_name: tradewhispr-backend
-    restart: unless-stopped
+  backend:
     build:
       context: ./backend
       dockerfile: Dockerfile
+    container_name: tradewhispr-backend
     environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-tradewhispruser}:${POSTGRES_PASSWORD:-changeme}@tradewhispr-db:5432/${POSTGRES_DB:-tradewhisprdb}
-      - REDIS_URL=redis://tradewhispr-redis:6379/0
-      - CELERY_BROKER_URL=redis://tradewhispr-redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://tradewhispr-redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
-      - CORS_ORIGINS=${CORS_ORIGINS:-http://tradewhispr.local}
+      # App settings
+      APP_NAME: ${APP_NAME:-TradeWhispr}
+      APP_VERSION: ${APP_VERSION:-0.1.0}
+      DEBUG: ${DEBUG:-true}
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
+
+      # Database
+      POSTGRES_USER: ${POSTGRES_USER:-tradewhispr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradewhispr_dev_password}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-tradewhispr}
+
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+
+      # CORS
+      CORS_ORIGINS: '["http://localhost:5174", "http://localhost:5173", "http://localhost:3000", "http://localhost:80"]'
+
+      # Disable vnai telemetry to avoid circular import
+      PYTHONDONTWRITEBYTECODE: 1
+      PYTHONUNBUFFERED: 1
+    volumes:
+      - ./backend:/app
+    ports:
+      - "8001:8000"  # Changed to 8001 to avoid conflict with other project
     depends_on:
-      tradewhispr-db:
+      db:
         condition: service_healthy
-      tradewhispr-redis:
+      redis:
         condition: service_healthy
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --reload
     networks:
-      - tradewhispr-internal
-      - traefik-public
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 40s
-    labels:
-      # Traefik configuration
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-public"
+      - tradewhispr-network
 
-      # HTTP Router
-      - "traefik.http.routers.tradewhispr-api.rule=Host(`${TRADEWHISPR_API_DOMAIN:-api.tradewhispr.local}`)"
-      - "traefik.http.routers.tradewhispr-api.entrypoints=web"
-      - "traefik.http.routers.tradewhispr-api.service=tradewhispr-api"
-
-      # Service
-      - "traefik.http.services.tradewhispr-api.loadbalancer.server.port=8000"
-
-      # Middleware
-      - "traefik.http.routers.tradewhispr-api.middlewares=security-headers@file,compression@file,cors-headers@file"
-
-      # HTTPS (uncomment for production with SSL)
-      # - "traefik.http.routers.tradewhispr-api-secure.rule=Host(`${TRADEWHISPR_API_DOMAIN:-api.tradewhispr.local}`)"
-      # - "traefik.http.routers.tradewhispr-api-secure.entrypoints=websecure"
-      # - "traefik.http.routers.tradewhispr-api-secure.tls=true"
-      # - "traefik.http.routers.tradewhispr-api-secure.tls.certresolver=letsencrypt"
-
-      # Auto-update
-      - "com.centurylinklabs.watchtower.enable=true"
-
-  # ===========================================================================
-  # Celery Worker - Background Tasks
-  # ===========================================================================
-  tradewhispr-celery-worker:
-    image: tradewhispr-backend:latest
+  # Celery Worker
+  celery_worker:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
     container_name: tradewhispr-celery-worker
-    restart: unless-stopped
-    command: celery -A app.celery worker --loglevel=info
     environment:
-      - ENVIRONMENT=${ENVIRONMENT:-production}
-      - DATABASE_URL=postgresql://${POSTGRES_USER:-tradewhispruser}:${POSTGRES_PASSWORD:-changeme}@tradewhispr-db:5432/${POSTGRES_DB:-tradewhisprdb}
-      - REDIS_URL=redis://tradewhispr-redis:6379/0
-      - CELERY_BROKER_URL=redis://tradewhispr-redis:6379/0
-      - CELERY_RESULT_BACKEND=redis://tradewhispr-redis:6379/0
-      - SECRET_KEY=${SECRET_KEY:-change-this-secret-key-in-production}
-    depends_on:
-      tradewhispr-db:
-        condition: service_healthy
-      tradewhispr-redis:
-        condition: service_healthy
-      tradewhispr-backend:
-        condition: service_healthy
-    networks:
-      - tradewhispr-internal
-    labels:
-      - "com.centurylinklabs.watchtower.enable=true"
+      # Database
+      POSTGRES_USER: ${POSTGRES_USER:-tradewhispr}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-tradewhispr_dev_password}
+      POSTGRES_HOST: db
+      POSTGRES_PORT: 5432
+      POSTGRES_DB: ${POSTGRES_DB:-tradewhispr}
 
-  # ===========================================================================
-  # Vue 3 Frontend (Production)
-  # ===========================================================================
-  tradewhispr-frontend:
-    image: tradewhispr-frontend:latest
-    container_name: tradewhispr-frontend
-    restart: unless-stopped
+      # Redis
+      REDIS_URL: redis://redis:6379/0
+
+      # Security
+      SECRET_KEY: ${SECRET_KEY:-your-secret-key-change-this-in-production}
+    volumes:
+      - ./backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: celery -A app.tasks worker --loglevel=info
+    networks:
+      - tradewhispr-network
+
+  # Vue 3 Frontend (Development mode with Vite)
+  frontend-dev:
+    image: node:20-alpine
+    container_name: tradewhispr-frontend-dev
+    working_dir: /app
+    environment:
+      VITE_API_BASE_URL: http://localhost:8001
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
+    ports:
+      - "5174:5173"  # Changed to 5174 to avoid conflict with other Vite apps
+    command: sh -c "npm install && npm run dev -- --host"
+    depends_on:
+      - backend
+    networks:
+      - tradewhispr-network
+    profiles:
+      - dev
+
+  # Vue 3 Frontend (Production mode with Nginx)
+  frontend-prod:
     build:
       context: ./frontend
       dockerfile: Dockerfile
-      args:
-        - VITE_API_URL=${VITE_API_URL:-http://api.tradewhispr.local}
-    environment:
-      - NODE_ENV=production
-      - VITE_API_URL=${VITE_API_URL:-http://api.tradewhispr.local}
+    container_name: tradewhispr-frontend-prod
+    ports:
+      - "80:80"
     depends_on:
-      - tradewhispr-backend
+      - backend
     networks:
-      - traefik-public
-    healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:80"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-      start_period: 30s
-    labels:
-      # Traefik configuration
-      - "traefik.enable=true"
-      - "traefik.docker.network=traefik-public"
-
-      # HTTP Router
-      - "traefik.http.routers.tradewhispr-web.rule=Host(`${TRADEWHISPR_DOMAIN:-tradewhispr.local}`)"
-      - "traefik.http.routers.tradewhispr-web.entrypoints=web"
-      - "traefik.http.routers.tradewhispr-web.service=tradewhispr-web"
-
-      # Service
-      - "traefik.http.services.tradewhispr-web.loadbalancer.server.port=80"
-
-      # Middleware
-      - "traefik.http.routers.tradewhispr-web.middlewares=security-headers@file,compression@file"
-
-      # HTTPS (uncomment for production with SSL)
-      # - "traefik.http.routers.tradewhispr-web-secure.rule=Host(`${TRADEWHISPR_DOMAIN:-tradewhispr.local}`)"
-      # - "traefik.http.routers.tradewhispr-web-secure.entrypoints=websecure"
-      # - "traefik.http.routers.tradewhispr-web-secure.tls=true"
-      # - "traefik.http.routers.tradewhispr-web-secure.tls.certresolver=letsencrypt"
-
-      # Auto-update
-      - "com.centurylinklabs.watchtower.enable=true"
-
-networks:
-  tradewhispr-internal:
-    driver: bridge
-  traefik-public:
-    external: true
+      - tradewhispr-network
+    profiles:
+      - prod
 
 volumes:
-  tradewhispr-db-data:
-    driver: local
-  tradewhispr-redis-data:
-    driver: local
+  postgres_data:
+  redis_data:
+
+networks:
+  tradewhispr-network:
+    driver: bridge

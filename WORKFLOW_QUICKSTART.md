@@ -27,23 +27,22 @@ The fastest way to start working:
 ```bash
 # 1. Check everything is healthy
 ./scripts/status.sh
-
-# 2. Start dev mode for your project
-./scripts/dev.sh flow
-
-# 3. Open in browser
-open http://flow.local
-
-# 4. Start coding on Mac!
-code ~/projects/flow
 ```
 
-### During Development
+### 2. Make Changes & Deploy
 
-**Just edit files on Mac** - everything else is automatic:
-
-- ✅ Files sync to Asus in real-time
-- ✅ Backend changes trigger rebuild
+1. **Edit code** in VS Code on your Mac.
+2. **Commit and Push** your changes:
+   ```bash
+   git push origin main
+   ```
+3. **Deploy** to the server:
+   ```bash
+   make deploy-tradewhispr
+   ```
+4. **Verify** changes:
+   - Frontend: http://tradewhispr.local
+   - API: http://api.tradewhispr.local/docs trigger rebuild
 - ✅ Frontend changes hot-reload
 - ✅ Logs show automatically
 
