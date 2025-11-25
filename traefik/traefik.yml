@@ -28,8 +28,7 @@ entryPoints:
 
   websecure:
     address: ":443"
-    # HTTP/3 support
-    http3: {}
+    # HTTP/2 disabled via TLS ALPN in dynamic/tls.yml to support WebSocket
 
   traefik:
     address: ":8080"  # Dashboard port
@@ -106,3 +105,13 @@ certificatesResolvers:
 global:
   checkNewVersion: true
   sendAnonymousUsage: false
+
+# TLS Configuration - Added by secure-local.sh
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/local-cert.pem
+      keyFile: /etc/traefik/certs/local-key.pem
+  options:
+    default:
+      minVersion: VersionTLS12
+      sniStrict: false

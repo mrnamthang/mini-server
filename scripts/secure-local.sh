@@ -109,13 +109,14 @@ if grep -q "certificates:" "$TRAEFIK_CONFIG"; then
     echo -e "${GREEN}✓ TLS configuration already exists${NC}"
 else
     # Add TLS configuration
+    # NOTE: Path must match Traefik docker-compose volume mount: ./certs:/etc/traefik/certs:ro
     cat >> "$TRAEFIK_CONFIG" << 'EOF'
 
 # TLS Configuration - Added by secure-local.sh
 tls:
   certificates:
-    - certFile: /certs/local-cert.pem
-      keyFile: /certs/local-key.pem
+    - certFile: /etc/traefik/certs/local-cert.pem
+      keyFile: /etc/traefik/certs/local-key.pem
   options:
     default:
       minVersion: VersionTLS12
@@ -129,7 +130,7 @@ echo ""
 echo -e "${YELLOW}5. Updating Traefik Docker Compose...${NC}"
 TRAEFIK_COMPOSE="$SCRIPT_DIR/../traefik/docker-compose.yml"
 
-if grep -q "/certs:/certs" "$TRAEFIK_COMPOSE"; then
+if grep -q "certs:/etc/traefik/certs" "$TRAEFIK_COMPOSE"; then
     echo -e "${GREEN}✓ Certificates volume already mounted${NC}"
 else
     # Add certs volume to Traefik
@@ -137,7 +138,7 @@ else
     # This requires manual edit for safety
     echo -e "${YELLOW}⚠️  Manual step required:${NC}"
     echo "Add this line to traefik/docker-compose.yml under volumes:"
-    echo "      - ./certs:/certs:ro"
+    echo "      - ./certs:/etc/traefik/certs:ro"
     echo ""
     echo "Press Enter when done..."
     read

@@ -1,0 +1,18 @@
+tls:
+  certificates:
+    - certFile: /etc/traefik/certs/local-cert.pem
+      keyFile: /etc/traefik/certs/local-key.pem
+      stores:
+        - default
+  stores:
+    default:
+      defaultCertificate:
+        certFile: /etc/traefik/certs/local-cert.pem
+        keyFile: /etc/traefik/certs/local-key.pem
+  options:
+    default:
+      minVersion: VersionTLS12
+      # Only offer HTTP/1.1 via ALPN - HTTP/2 breaks WebSocket upgrade
+      # WebSocket requires HTTP/1.1's 101 Switching Protocols mechanism
+      alpnProtocols:
+        - http/1.1

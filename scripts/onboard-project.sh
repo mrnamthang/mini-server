@@ -415,6 +415,221 @@ fi
 echo ""
 
 # ============================================================================
+# STEP 5.5: Generate INFRASTRUCTURE.md
+# ============================================================================
+echo -e "${YELLOW}📚 Generating infrastructure documentation...${NC}"
+
+# Create INFRASTRUCTURE.md in local project directory
+cat > "$LOCAL_PROJECT_DIR/INFRASTRUCTURE.md" <<'INFRA_EOF'
+# Infrastructure Documentation
+
+## Overview
+
+This project runs on an Asus server (Ubuntu 22.04) using Docker + Traefik reverse proxy. This document explains the infrastructure setup so Claude Code understands the deployment architecture when working inside this project directory.
+
+## Architecture Pattern
+
+**Mac (Development) → Asus Server (Execution)**
+
+- **Edit code**: On Mac using any editor
+- **Auto-sync**: Files sync to Asus via `rsync`
+- **Execution**: All containers, databases, and services run on Asus
+- **Access**: Via Traefik reverse proxy using `.local` domains
+
+## Access URLs
+
+| Service | URL | Description |
+|---------|-----|-------------|
+| Main App | `https://DOMAIN` | Application frontend |
+| API | `https://api.DOMAIN` | Backend API (if applicable) |
+
+**Note**: Replace `DOMAIN` with your actual domain (e.g., `project.local`)
+
+## Development Workflow
+
+### From Mini-Server Repository
+
+```bash
+# Start development (auto-sync + rebuild + logs)
+cd /path/to/mini-server
+./scripts/dev.sh PROJECT_NAME
+
+# View logs
+./scripts/logs.sh PROJECT_NAME [service]
+
+# Restart services
+./scripts/projects.sh restart PROJECT_NAME
+
+# Force rebuild after backend changes
+./scripts/rebuild-on-asus.sh PROJECT_NAME [service]
+```
+
+### From This Directory
+
+When working directly in this project directory:
+
+```bash
+# Sync changes to Asus
+rsync -avz --exclude 'node_modules' --exclude '.git' \
+  ./ asus-server:/opt/projects/PROJECT_NAME/
+
+# Restart services on Asus
+ssh asus-server "cd /opt/projects/PROJECT_NAME && docker-compose up -d"
+
+# View logs
+ssh asus-server "cd /opt/projects/PROJECT_NAME && docker-compose logs -f [service]"
+
+# Rebuild specific service
+ssh asus-server "cd /opt/projects/PROJECT_NAME && docker-compose build SERVICE && docker-compose up -d SERVICE"
+```
+
+## Traefik Configuration
+
+### How Routing Works
+
+1. **Traefik listens** on ports 80 (HTTP) and 443 (HTTPS)
+2. **Docker labels** define routing rules
+3. **Traefik routes** traffic based on `Host()` rules
+4. **Containers** connect to `traefik-public` network
+5. **SSL** handled by mkcert certificates
+
+### Label Pattern for New Services
+
+```yaml
+labels:
+  - "traefik.enable=true"
+  - "traefik.docker.network=traefik-public"
+
+  # Define service (port where container listens)
+  - "traefik.http.services.{name}.loadbalancer.server.port=8000"
+
+  # HTTP router (redirects to HTTPS)
+  - "traefik.http.routers.{name}.rule=Host(`subdomain.local`)"
+  - "traefik.http.routers.{name}.entrypoints=web"
+  - "traefik.http.routers.{name}.service={name}"
+  - "traefik.http.routers.{name}.middlewares=redirect-to-https"
+
+  # HTTPS router (secure endpoint)
+  - "traefik.http.routers.{name}-secure.rule=Host(`subdomain.local`)"
+  - "traefik.http.routers.{name}-secure.entrypoints=websecure"
+  - "traefik.http.routers.{name}-secure.service={name}"
+  - "traefik.http.routers.{name}-secure.tls=true"
+
+  # Middleware definition
+  - "traefik.http.middlewares.redirect-to-https.redirectscheme.scheme=https"
+```
+
+### Important Rules
+
+1. **One service per container** - Don't define multiple services for the same container
+2. **Explicit service linking** - Use `.service={name}` to link routers to services
+3. **traefik-public network** - All exposed services must join this network
+4. **traefik.docker.network** label - Required when container is on multiple networks
+
+## Network Architecture
+
+```
+[Mac]
+  ↓ rsync
+[Asus Server: 192.168.1.10]
+  ↓
+[Traefik :80/:443] ← TLS certificates
+  ↓
+  └─→ project.local → containers
+```
+
+## SSL Certificates
+
+Certificates generated using mkcert:
+
+```bash
+# On Mac (if not already done)
+brew install mkcert
+mkcert -install
+
+# From mini-server repository
+./scripts/secure-local.sh
+```
+
+Certificates stored at: `/opt/traefik/certs/local-cert.pem`
+
+## Troubleshooting
+
+### Services Not Accessible
+
+```bash
+# Check Traefik status
+ssh asus-server "docker ps | grep traefik"
+
+# Check project services
+ssh asus-server "docker ps | grep PROJECT_NAME"
+
+# Check Traefik logs
+ssh asus-server "tail -100 /opt/traefik/logs/traefik.log"
+
+# Check Traefik dashboard
+http://192.168.1.10:8080/dashboard/
+```
+
+### 404 Errors
+
+1. Verify containers are on `traefik-public` network:
+   ```bash
+   ssh asus-server "docker inspect CONTAINER_NAME | jq '.[0].NetworkSettings.Networks'"
+   ```
+
+2. Check Traefik labels are correct:
+   ```bash
+   ssh asus-server "docker inspect CONTAINER_NAME | jq '.[0].Config.Labels'"
+   ```
+
+3. Verify routers in Traefik:
+   ```bash
+   curl -s http://192.168.1.10:8080/api/http/routers | jq
+   ```
+
+## SSH Configuration
+
+Required in `~/.ssh/config`:
+
+```
+Host asus-server
+    HostName 192.168.1.10
+    User thang
+```
+
+## Important Notes for Claude Code
+
+1. **Never run Docker commands locally on Mac** - All containers run on Asus
+2. **Always sync before testing** - Changes must be copied to Asus to take effect
+3. **Use Traefik labels** - Don't expose ports directly, route through Traefik
+4. **Backend changes need rebuild** - Frontend hot-reloads, backend needs container rebuild
+5. **Check Traefik logs first** - Most routing issues are visible in Traefik logs
+
+## Parent Repository
+
+This project is managed by the parent infrastructure repository:
+
+```bash
+/path/to/mini-server/
+```
+
+For infrastructure changes, deployment, or Traefik configuration, refer to the parent repository's documentation.
+INFRA_EOF
+
+# Replace placeholders with actual values
+sed -i.bak "s|PROJECT_NAME|$PROJECT_NAME|g" "$LOCAL_PROJECT_DIR/INFRASTRUCTURE.md"
+sed -i.bak "s|DOMAIN|$DOMAIN|g" "$LOCAL_PROJECT_DIR/INFRASTRUCTURE.md"
+sed -i.bak "s|/path/to/mini-server|$REPO_ROOT|g" "$LOCAL_PROJECT_DIR/INFRASTRUCTURE.md"
+rm -f "$LOCAL_PROJECT_DIR/INFRASTRUCTURE.md.bak"
+
+# Copy to Asus
+scp "$LOCAL_PROJECT_DIR/INFRASTRUCTURE.md" "$ASUS_USER@$ASUS_HOST:$REMOTE_PROJECT_DIR/"
+
+echo -e "${GREEN}✓ Infrastructure documentation created${NC}"
+echo ""
+
+# ============================================================================
 # STEP 6: Configure local access
 # ============================================================================
 echo -e "${YELLOW}🌐 Step 6: Configuring local access...${NC}"
