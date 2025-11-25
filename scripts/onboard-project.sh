@@ -646,6 +646,49 @@ fi
 echo ""
 
 # ============================================================================
+# STEP 7: Optional SSL/HTTPS setup
+# ============================================================================
+echo -e "${YELLOW}🔒 Step 7: SSL/HTTPS Setup (optional)...${NC}"
+echo ""
+echo "Would you like to enable HTTPS for this project now?"
+echo -e "${CYAN}This will:${NC}"
+echo "  • Set up mkcert certificates (one-time)"
+echo "  • Configure Traefik for HTTPS"
+echo "  • Enable HTTP → HTTPS redirect"
+echo "  • Add security headers (HSTS, etc.)"
+echo ""
+read -p "Enable HTTPS now? (y/n, default: n): " ENABLE_SSL
+
+if [[ "$ENABLE_SSL" =~ ^[Yy]$ ]]; then
+    echo -e "${YELLOW}→ Running SSL setup...${NC}"
+
+    # Check if secure-local.sh has been run before
+    SSL_ALREADY_SETUP=$(ssh "$ASUS_SSH_ALIAS" "test -f /opt/traefik/certs/local-cert.pem && echo yes || echo no" 2>/dev/null || echo "no")
+
+    if [ "$SSL_ALREADY_SETUP" = "no" ]; then
+        echo -e "${BLUE}ℹ️  First-time SSL setup for all .local domains${NC}"
+        "$SCRIPT_DIR/secure-local.sh"
+    else
+        echo -e "${GREEN}✓ SSL infrastructure already configured${NC}"
+    fi
+
+    # Run project-specific SSL configuration
+    echo -e "${YELLOW}→ Enabling HTTPS for $PROJECT_NAME...${NC}"
+    "$SCRIPT_DIR/secure.sh" "$PROJECT_NAME"
+
+    echo -e "${GREEN}✓ HTTPS enabled for $PROJECT_NAME${NC}"
+    HTTPS_ENABLED=true
+else
+    echo -e "${YELLOW}⏭  Skipped SSL setup${NC}"
+    echo -e "${CYAN}ℹ️  You can enable HTTPS later by running:${NC}"
+    echo -e "  ${YELLOW}./scripts/secure-local.sh${NC} (one-time setup)"
+    echo -e "  ${YELLOW}./scripts/secure.sh $PROJECT_NAME${NC} (for this project)"
+    HTTPS_ENABLED=false
+fi
+
+echo ""
+
+# ============================================================================
 # FINAL: Success message
 # ============================================================================
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
@@ -653,8 +696,13 @@ echo -e "${GREEN}✅ Project $PROJECT_NAME deployed successfully!${NC}"
 echo -e "${BLUE}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${NC}"
 echo ""
 echo -e "${CYAN}🎯 Access your application:${NC}"
-echo -e "  ${GREEN}http://$DOMAIN${NC}"
-echo -e "  ${GREEN}http://api.$DOMAIN${NC} (if API exists)"
+if [ "$HTTPS_ENABLED" = true ]; then
+    echo -e "  ${GREEN}https://$DOMAIN${NC} (auto-redirects from HTTP)"
+    echo -e "  ${GREEN}https://api.$DOMAIN${NC} (if API exists)"
+else
+    echo -e "  ${GREEN}http://$DOMAIN${NC}"
+    echo -e "  ${GREEN}http://api.$DOMAIN${NC} (if API exists)"
+fi
 echo ""
 echo -e "${CYAN}📁 Files location on Asus:${NC}"
 echo -e "  Code: ${BLUE}$REMOTE_SRC_DIR${NC}"
@@ -675,9 +723,13 @@ if [ "$PROJECT_TYPE" == "laravel" ]; then
     echo ""
 fi
 
-echo -e "${CYAN}🔒 Enable HTTPS:${NC}"
-echo -e "  Run: ${YELLOW}./scripts/secure-local.sh${NC} (one-time setup for all projects)"
-echo ""
+if [ "$HTTPS_ENABLED" != true ]; then
+    echo -e "${CYAN}🔒 Enable HTTPS (optional):${NC}"
+    echo -e "  ${YELLOW}./scripts/secure-local.sh${NC} (one-time infrastructure setup)"
+    echo -e "  ${YELLOW}./scripts/secure.sh $PROJECT_NAME${NC} (enable for this project)"
+    echo ""
+fi
+
 echo -e "${CYAN}📊 View logs:${NC}"
 echo -e "  ${YELLOW}./scripts/dev.sh $PROJECT_NAME logs-only${NC}"
 echo ""
